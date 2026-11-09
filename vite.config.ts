@@ -16,11 +16,6 @@ if (manifest.version !== pkg.version) {
 const envName = process.env.ENV_NAME === 'production' ? 'production' : 'develop'
 console.log(`${envName} build`)
 
-const sentryDSN = process.env.SENTRY_DSN
-if (!sentryDSN) {
-    console.warn('WARNING: SENTRY_DSN environment variable is not set. Sentry error reporting will be disabled.')
-}
-
 function appendModelLicensesPlugin(): Plugin {
     return {
         name: 'append-model-licenses',
@@ -80,6 +75,5 @@ export default defineConfig(({ mode }) => ({
         'process.env.PKG_NAME': JSON.stringify(pkg.name),
         'process.env.VERSION': JSON.stringify(pkg.version),
         'process.env.ENV_NAME': JSON.stringify(envName),
-        'process.env.SENTRY_DSN': JSON.stringify(sentryDSN),
     },
 }))

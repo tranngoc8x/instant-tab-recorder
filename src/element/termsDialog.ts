@@ -8,7 +8,7 @@ import { Settings } from './settings'
 import { Configuration } from '../configuration'
 import type { FetchConfigMessage } from '../message'
 import { t } from '../i18n'
-import { sendEvent } from '../sentry'
+import { sendEvent } from '../telemetry'
 
 @customElement('extension-terms-dialog')
 export class TermsDialog extends LitElement {

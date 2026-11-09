@@ -349,9 +349,7 @@ export class Configuration {
     windowSize: Resolution
     screenRecordingSize: ScreenRecordingSize
     videoFormat: VideoFormat
-    enableBugTracking: boolean
     updatedAt: number
-    userId: string
     openOptionPage: boolean
     muteRecordingTab: boolean
     microphone: Microphone
@@ -386,9 +384,7 @@ export class Configuration {
             8 * 1000 * 1000, // videoBitrate (8mbps)
             30, // frameRate (30fps)
         )
-        this.enableBugTracking = true
         this.updatedAt = 0
-        this.userId = ''
         this.openOptionPage = true
         this.muteRecordingTab = false
         this.microphone = {
@@ -428,9 +424,9 @@ export class Configuration {
             prompt: DEFAULT_SUMMARY_PROMPT,
         }
     }
-    static restoreDefault({ userId, hasAgreedTerms }: Configuration): Configuration {
+    static restoreDefault({ hasAgreedTerms = false }: Partial<Configuration> = {}): Configuration {
         const config = new Configuration()
-        return { ...config, userId, hasAgreedTerms }
+        return { ...config, hasAgreedTerms }
     }
     static filterForSync(config: Configuration): SyncConfiguration {
         // Exclude microphone, cropping, transcription, and summary from sync as it depends on device-specific information

@@ -15,9 +15,8 @@ vi.mock('../../src/api_client', () => ({
         getStorageEstimate: vi.fn().mockResolvedValue({ usage: 0, quota: 1073741824 }),
     },
 }))
-vi.mock('../../src/sentry', () => ({
+vi.mock('../../src/telemetry', () => ({
     sendException: vi.fn(),
-    sendFeedback: vi.fn(),
     sendEvent: vi.fn(),
 }))
 

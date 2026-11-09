@@ -6,7 +6,7 @@ vi.mock('mediabunny', () => ({
 vi.mock('@mediabunny/flac-encoder', () => ({
     registerFlacEncoder: vi.fn(),
 }))
-vi.mock('../../src/sentry', () => ({
+vi.mock('../../src/telemetry', () => ({
     sendException: vi.fn(),
 }))
 

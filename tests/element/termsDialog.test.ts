@@ -3,11 +3,11 @@ import { html } from 'lit'
 import { describe, test, expect, beforeEach, vi } from 'vitest'
 import { shadowQuery, elementUpdated } from './test-helpers'
 
-vi.mock('../../src/sentry', () => ({
+vi.mock('../../src/telemetry', () => ({
     sendEvent: vi.fn(),
 }))
 
-import { sendEvent } from '../../src/sentry'
+import { sendEvent } from '../../src/telemetry'
 import '../../src/element/termsDialog'
 import type TermsDialog from '../../src/element/termsDialog'
 import { Settings } from '../../src/element/settings'

@@ -1,5 +1,3 @@
-import { v7 as uuidv7 } from 'uuid'
-
 import type { getMediaStreamId } from './type'
 import type {
     Trigger,
@@ -13,7 +11,7 @@ import type {
     ExceptionMessage,
     RecordingStateMessage,
     CancelRecordingMessage,
-    SentryEventMessage,
+    TelemetryEventMessage,
     CloseOffscreenIfIdleMessage,
 } from './message'
 import { TIMER_STOP_CONFIRM_PENDING_KEY, TIMER_STOP_TRIGGER_KEY } from './message'
@@ -48,9 +46,6 @@ chrome.runtime.onInstalled.addListener(async details => {
         remoteConfig.screenRecordingSize.auto = false
     }
     const config = remoteConfig == null ? defaultConfig : deepMerge(defaultConfig, remoteConfig)
-    if (config.userId === '') {
-        config.userId = uuidv7()
-    }
     Configuration.migrate(config, remoteConfig as unknown as Record<string, unknown>)
     await storage.set(Configuration.key, config)
     console.debug('config:', config)
@@ -61,12 +56,12 @@ chrome.runtime.onInstalled.addListener(async details => {
     }
     await chrome.runtime.sendMessage(msg)
 
-    // Migrate existing OPFS recordings to IndexedDB (before closing offscreen for Sentry logging)
+    // Migrate existing OPFS recordings to IndexedDB (before closing offscreen for telemetry logging)
     try {
         const status = await recordingDB.needsMigration(recordingStorage)
         if (status.needed) {
-            const sentryStart: SentryEventMessage = {
-                type: 'sentry-event',
+            const telemetryStart: TelemetryEventMessage = {
+                type: 'telemetry-event',
                 event: {
                     type: 'migration_start',
                     metrics: {
@@ -75,18 +70,18 @@ chrome.runtime.onInstalled.addListener(async details => {
                     },
                 },
             }
-            await chrome.runtime.sendMessage(sentryStart)
+            await chrome.runtime.sendMessage(telemetryStart)
             const startTime = performance.now()
             const inserted = await recordingDB.migrateFromOPFS(recordingStorage)
             const durationMs = Math.round(performance.now() - startTime)
-            const sentryEnd: SentryEventMessage = {
-                type: 'sentry-event',
+            const telemetryEnd: TelemetryEventMessage = {
+                type: 'telemetry-event',
                 event: {
                     type: 'migration_end',
                     metrics: { inserted, durationMs },
                 },
             }
-            await chrome.runtime.sendMessage(sentryEnd)
+            await chrome.runtime.sendMessage(telemetryEnd)
             console.info('IndexedDB migration completed', { inserted, durationMs })
         } else {
             console.debug('IndexedDB migration skipped (already up to date)')

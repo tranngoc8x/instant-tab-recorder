@@ -515,65 +515,6 @@
     "supportDevelopmentDescription": {
         "message": "みなさまのご支援がこの拡張機能の維持と改善に役立ちます。"
     },
-    "supportFeedback": {
-        "message": "フィードバック"
-    },
-    "supportFeedbackDescription": {
-        "message": "開発者に直接フィードバックを送信できます。バグトラッキングを有効にしても個人情報は共有されません。"
-    },
-    "supportBugTracking": {
-        "message": "バグトラッキング"
-    },
-    "supportBugTrackingRequired": {
-        "message": "フィードバックを送信するには、バグトラッキングを有効にしてください。"
-    },
-    "supportFeedbackType": {
-        "message": "フィードバックの種類"
-    },
-    "supportBugReport": {
-        "message": "不具合報告"
-    },
-    "supportFeatureRequest": {
-        "message": "機能リクエスト / その他"
-    },
-    "supportMessage": {
-        "message": "メッセージ"
-    },
-    "supportCharCount": {
-        "message": "$COUNT$ / $MAX$ 文字",
-        "placeholders": {
-            "count": {
-                "content": "$1"
-            },
-            "max": {
-                "content": "$2"
-            }
-        }
-    },
-    "supportImportantNotice": {
-        "message": "メッセージに個人情報を含めないでください。個別の返信は原則行っておりません。すべてのフィードバックはベストエフォートで対応します。"
-    },
-    "supportImportantLabel": {
-        "message": "重要:"
-    },
-    "supportSending": {
-        "message": "送信中..."
-    },
-    "supportSendFeedback": {
-        "message": "フィードバックを送信"
-    },
-    "supportThankYou": {
-        "message": "フィードバックありがとうございます！"
-    },
-    "supportInformation": {
-        "message": "お知らせ"
-    },
-    "supportSendFailed": {
-        "message": "フィードバックの送信に失敗しました。バグトラッキングが有効になっていることを確認してください。"
-    },
-    "supportSendError": {
-        "message": "フィードバックの送信に失敗しました。もう一度お試しください。"
-    },
     "croppingHeading": {
         "message": "切り抜き"
     },

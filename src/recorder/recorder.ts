@@ -11,7 +11,7 @@ import type { OutputManager, PausableSource } from './output_manager'
 import type { AudioSeparationManager, AudioSeparationOutputs } from './audio_separation'
 import type { FileManager } from './file_manager'
 import type { SubFileInfo } from '../recording_db'
-import { sendException } from '../sentry'
+import { sendException } from '../telemetry'
 import type { OffscreenSession } from '../offscreen_handler'
 import { registerFlacEncoder } from '@mediabunny/flac-encoder'
 

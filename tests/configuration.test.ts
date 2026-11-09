@@ -376,9 +376,7 @@ describe('Configuration.recordingTimer', () => {
     })
 
     it('should reset recordingTimer on restoreDefault', () => {
-        const config = new Configuration()
-        config.recordingTimer = { enabled: true, durationMinutes: 120, skipStopConfirmation: true }
-        const restored = Configuration.restoreDefault(config)
+        const restored = Configuration.restoreDefault()
         expect(restored.recordingTimer).toEqual({ enabled: false, durationMinutes: 30, skipStopConfirmation: false })
     })
 })

@@ -8,7 +8,7 @@ export const TIMER_STOP_TRIGGER_KEY = 'timerStopTrigger'
 
 export type Message =
     | ExceptionMessage
-    | SentryEventMessage
+    | TelemetryEventMessage
     | StartRecordingMessage
     | TabTrackEndedMessage
     | StopRecordingMessage
@@ -60,9 +60,9 @@ export interface ExceptionMessage {
     data: unknown
 }
 
-export interface SentryEventMessage {
-    type: 'sentry-event'
-    event: import('./sentry_event').Event
+export interface TelemetryEventMessage {
+    type: 'telemetry-event'
+    event: import('./telemetry_event').Event
 }
 
 export type Trigger = 'action-icon' | 'context-menu' | 'keyboard-shortcut' | 'tab-track-ended' | 'timer'

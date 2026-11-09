@@ -1101,7 +1101,6 @@ export class Settings extends LitElement {
                             break
                     }
                     break
-                case 'enableBugTracking':
                 case 'openOptionPage':
                 case 'muteRecordingTab':
                     if (!(e.target instanceof MdSwitch)) return
@@ -1358,7 +1357,9 @@ export class Settings extends LitElement {
     }
 
     private async restore() {
+        const oldVal = this.config
         this.config = Configuration.restoreDefault(this.config)
+        this.requestUpdate('config', oldVal)
         this.resetValidityError()
         Settings.setConfiguration(this.config)
         applyTheme(this.config.uiTheme)

@@ -3,7 +3,7 @@ import { ALL_FORMATS, BlobSource, Input, Conversion, BufferTarget, WavOutputForm
 import type { TranscriptionResult, WorkerInMessage, WorkerOutMessage } from './types'
 import { wavToFloat32Array } from './utils'
 import { TRANSCRIPTION_MODEL_REPO } from './model_files'
-import type { Event } from '../sentry_event'
+import type { Event } from '../telemetry_event'
 import { BaseMLSession, abortable, type BaseMLSessionDeps } from '../ml/base_session'
 import { initializeWorker, executeWorkerTask } from '../ml/worker_client'
 

@@ -3,12 +3,10 @@ import { html } from 'lit'
 import { describe, test, expect, vi, afterEach } from 'vitest'
 import { shadowQuery, shadowQueryAll, elementUpdated } from './test-helpers'
 
-// Mock sentry to avoid process.env references in browser
-vi.mock('../../src/sentry', () => ({
+// Mock telemetry to keep console output out of test logs
+vi.mock('../../src/telemetry', () => ({
     sendException: vi.fn(),
-    sendFeedback: vi.fn(() => true),
     sendEvent: vi.fn(),
-    FeedbackType: {},
 }))
 
 import '../../src/element/support'
@@ -39,67 +37,20 @@ describe('extension-support', () => {
         expect(link?.getAttribute('href')).toContain('buymeacoffee.com')
     })
 
-    test('renders feedback section with heading', async () => {
+    // Sentry was removed: the feedback form and its bug-tracking opt-in must stay gone,
+    // otherwise the extension is back to shipping user input off the device.
+    test('renders no feedback form or bug tracking switch', async () => {
         const screen = render(html`<extension-support></extension-support>`)
         const el = screen.container.querySelector('extension-support')!
         await elementUpdated(el)
 
-        const headings = shadowQueryAll(el, 'h2')
-        const feedbackHeading = headings.find(h => h.textContent?.trim() === 'Feedback')
-        expect(feedbackHeading).not.toBeUndefined()
-    })
+        const headings = shadowQueryAll(el, 'h2').map(h => h.textContent?.trim())
+        expect(headings).not.toContain('Feedback')
 
-    test('renders feedback form with type selector', async () => {
-        const screen = render(html`<extension-support></extension-support>`)
-        const el = screen.container.querySelector('extension-support')!
-        await elementUpdated(el)
-
-        const select = shadowQuery(el, '.feedback-form md-filled-select')
-        expect(select).not.toBeNull()
-    })
-
-    test('renders feedback form with message textarea', async () => {
-        const screen = render(html`<extension-support></extension-support>`)
-        const el = screen.container.querySelector('extension-support')!
-        await elementUpdated(el)
-
-        const textField = shadowQuery(el, '.feedback-form md-filled-text-field')
-        expect(textField).not.toBeNull()
-        expect(textField?.getAttribute('type')).toBe('textarea')
-    })
-
-    test('renders character count display', async () => {
-        const screen = render(html`<extension-support></extension-support>`)
-        const el = screen.container.querySelector('extension-support')!
-        await elementUpdated(el)
-
-        const charCount = shadowQuery(el, '.char-count')
-        expect(charCount).not.toBeNull()
-        // Default: 0 characters
-        expect(charCount?.textContent).toContain('0')
-        expect(charCount?.textContent).toContain('1000')
-    })
-
-    test('renders bug tracking switch', async () => {
-        const screen = render(html`<extension-support></extension-support>`)
-        const el = screen.container.querySelector('extension-support')!
-        await elementUpdated(el)
-
-        const bugTrackingLabel = shadowQueryAll(el, 'label').find(l => l.textContent?.includes('Bug Tracking'))
-        expect(bugTrackingLabel).not.toBeUndefined()
-
-        const switchEl = shadowQuery(el, 'md-switch')
-        expect(switchEl).not.toBeNull()
-    })
-
-    test('renders send feedback button', async () => {
-        const screen = render(html`<extension-support></extension-support>`)
-        const el = screen.container.querySelector('extension-support')!
-        await elementUpdated(el)
-
-        const sendBtn = shadowQuery(el, '.feedback-form md-filled-tonal-button')
-        expect(sendBtn).not.toBeNull()
-        expect(sendBtn?.textContent?.trim()).toContain('Send Feedback')
+        expect(shadowQuery(el, '.feedback-form')).toBeNull()
+        expect(shadowQuery(el, 'md-filled-text-field')).toBeNull()
+        expect(shadowQuery(el, 'md-filled-select')).toBeNull()
+        expect(shadowQuery(el, 'md-switch')).toBeNull()
     })
 
     test('renders Support Development section', async () => {

@@ -28,10 +28,9 @@ vi.mock('../../src/api_client', () => ({
     },
 }))
 
-// Mock sentry to avoid initialization errors
-vi.mock('../../src/sentry', () => ({
+// Mock telemetry to keep console output out of test logs
+vi.mock('../../src/telemetry', () => ({
     sendException: vi.fn(),
-    sendFeedback: vi.fn(),
     sendEvent: vi.fn(),
 }))
 

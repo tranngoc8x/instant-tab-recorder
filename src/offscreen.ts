@@ -7,7 +7,7 @@ import type {
     UnexpectedRecordingStateMessage,
     RecordingTickMessage,
 } from './message'
-import { flush, sendEvent, sendException } from './sentry'
+import { flush, sendEvent, sendException } from './telemetry'
 import { Preview } from './preview'
 import { Crop } from './crop'
 import { createRecordingSession } from './recorder'

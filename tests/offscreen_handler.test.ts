@@ -527,7 +527,7 @@ describe('cancel-recording', () => {
 
 describe('save-config-local', () => {
     it('calls mergeRemoteConfiguration with data', async () => {
-        const data = { userId: 'test-user' } as Configuration
+        const data = { recordingSortOrder: 'desc' } as Configuration
         const deps = createMockDeps()
         const handler = new OffscreenHandler(deps)
         await handler.handleMessage({ type: 'save-config-local', data })
@@ -642,14 +642,14 @@ describe('exception', () => {
     })
 })
 
-// ---------- sentry-event ----------
+// ---------- telemetry-event ----------
 
-describe('sentry-event', () => {
+describe('telemetry-event', () => {
     it('calls sendEvent with the event payload', async () => {
         const deps = createMockDeps()
         const handler = new OffscreenHandler(deps)
         await handler.handleMessage({
-            type: 'sentry-event',
+            type: 'telemetry-event',
             event: {
                 type: 'migration_start',
                 metrics: { opfsMainFileCount: 5, idbRecordCount: 3 },

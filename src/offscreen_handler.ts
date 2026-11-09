@@ -10,7 +10,7 @@ import type {
     TimerUpdatedMessage,
 } from './message'
 import type { RecordingConfig, RecordingResult } from './recorder'
-import type { Event, ExceptionMetadata } from './sentry_event'
+import type { Event, ExceptionMetadata } from './telemetry_event'
 import type { RecordingDB, RecordingRecord } from './recording_db'
 import { generateThumbnail, NoVideoError } from './thumbnail'
 import type { TranscriptionSession } from './transcription/session'
@@ -102,7 +102,7 @@ export class OffscreenHandler {
                 return this.handleUpdateRecordingTimer(message.enabled, message.durationMinutes)
             case 'exception':
                 return Promise.reject(message.data)
-            case 'sentry-event':
+            case 'telemetry-event':
                 this.deps.sendEvent(message.event)
                 return this.deps.flush()
             case 'preview-control':

@@ -180,14 +180,14 @@ describe('save-config-sync', () => {
 
 describe('fetch-config', () => {
     it('returns merged config when remote exists', async () => {
-        const remoteConfig = { userId: 'test-user' } as Configuration
+        const remoteConfig = { recordingSortOrder: 'desc' } as Configuration
         const deps = createMockDeps({
             getRemoteConfiguration: vi.fn().mockResolvedValue(remoteConfig),
         })
         const result = handleMessage({ type: 'fetch-config' }, deps)
         const config = await result!.response
         expect(config).toBeDefined()
-        expect(config?.userId).toBe('test-user')
+        expect(config?.recordingSortOrder).toBe('desc')
     })
 
     it('returns undefined when no remote config', async () => {
@@ -275,7 +275,7 @@ describe('createMessageListener', () => {
     })
 
     it('calls sendResponse with config when response resolves', async () => {
-        const remoteConfig = { userId: 'test' } as Configuration
+        const remoteConfig = { recordingSortOrder: 'desc' } as Configuration
         const deps = createMockDeps({
             getRemoteConfiguration: vi.fn().mockResolvedValue(remoteConfig),
         })
@@ -288,7 +288,7 @@ describe('createMessageListener', () => {
         await vi.waitFor(() => {
             expect(sendResponse).toHaveBeenCalledTimes(1)
         })
-        expect(sendResponse).toHaveBeenCalledWith(expect.objectContaining({ userId: 'test' }))
+        expect(sendResponse).toHaveBeenCalledWith(expect.objectContaining({ recordingSortOrder: 'desc' }))
         expect(onError).not.toHaveBeenCalled()
     })
 
