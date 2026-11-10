@@ -75,6 +75,7 @@ export interface StartRecordingMessage {
     trigger: StartTrigger
 }
 export interface StartRecording {
+    meetingTitle?: string
     tabSize: Resolution
     streamId: string
 }

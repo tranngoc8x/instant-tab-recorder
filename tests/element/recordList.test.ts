@@ -788,121 +788,124 @@ describe('record-list fetch error', () => {
         expect((el as any).records[0]?.hasTranscription).toBe(false)
     })
 
-    test('saveSelectedRecords downloads main file, sub-files, transcription, and summary, and shows progress dialog', async () => {
-        const ts = '1000000000000'
-        const mainPath = `video-${ts}.webm`
-        const tabPath = `video-${ts}-tab.webm`
-        listRecordingsMock.mockResolvedValue([
-            {
-                title: mainPath,
-                path: mainPath,
-                size: 2048,
-                lastModified: Date.now(),
-                mimeType: 'video/webm',
-                recordedAt: Number(ts),
-                isRecording: false,
-                isTemporary: false,
-                subFiles: [{ path: tabPath, type: 'tab', fileSize: 1024 }],
-                subFilesSize: 1024,
-                hasTranscription: true,
-                hasSummary: true,
-            },
-        ])
-
-        // Mock recordingApi
-        getContentLengthMock.mockImplementation(async (url: string) => {
-            if (url.includes('transcription.vtt')) return 100
-            if (url.includes('summary.md')) return 50
-            return null
-        })
-        getFileStreamMock.mockImplementation(async (url: string) => {
-            let text = ''
-            if (url.includes('transcription.vtt')) text = 'WEBVTT\n\n00:00:00.000 --> 00:00:02.000\nHello world'
-            else if (url.includes('summary.md')) text = '# Summary content'
-            else if (url.includes(tabPath)) text = 'audio-data'
-            else if (url.includes(mainPath)) text = 'video-data'
-            const bytes = new TextEncoder().encode(text)
-            return new ReadableStream({
-                start(controller) {
-                    controller.enqueue(bytes)
-                    controller.close()
+    test.each([undefined, 'Họp nhóm_2026-11-10.webm'])(
+        'saveSelectedRecords downloads files using display title %s',
+        async meetingTitle => {
+            const ts = '1000000000000'
+            const mainPath = `video-${ts}.webm`
+            const tabPath = `video-${ts}-tab.webm`
+            listRecordingsMock.mockResolvedValue([
+                {
+                    title: meetingTitle ?? mainPath,
+                    path: mainPath,
+                    size: 2048,
+                    lastModified: Date.now(),
+                    mimeType: 'video/webm',
+                    recordedAt: Number(ts),
+                    isRecording: false,
+                    isTemporary: false,
+                    subFiles: [{ path: tabPath, type: 'tab', fileSize: 1024 }],
+                    subFilesSize: 1024,
+                    hasTranscription: true,
+                    hasSummary: true,
                 },
-            })
-        })
+            ])
 
-        // Mock window.showDirectoryPicker
-        const writtenFiles = new Map<string, string>()
-        const mockFileHandle = (name: string) => ({
-            createWritable: vi.fn().mockImplementation(async () => {
-                const chunks: Uint8Array[] = []
-                return new WritableStream<Uint8Array>({
-                    write(chunk) {
-                        chunks.push(chunk)
-                    },
-                    close() {
-                        const str = chunks.map(c => new TextDecoder().decode(c)).join('')
-                        writtenFiles.set(name, str)
+            // Mock recordingApi
+            getContentLengthMock.mockImplementation(async (url: string) => {
+                if (url.includes('transcription.vtt')) return 100
+                if (url.includes('summary.md')) return 50
+                return null
+            })
+            getFileStreamMock.mockImplementation(async (url: string) => {
+                let text = ''
+                if (url.includes('transcription.vtt')) text = 'WEBVTT\n\n00:00:00.000 --> 00:00:02.000\nHello world'
+                else if (url.includes('summary.md')) text = '# Summary content'
+                else if (url.includes(tabPath)) text = 'audio-data'
+                else if (url.includes(mainPath)) text = 'video-data'
+                const bytes = new TextEncoder().encode(text)
+                return new ReadableStream({
+                    start(controller) {
+                        controller.enqueue(bytes)
+                        controller.close()
                     },
                 })
-            }),
-        })
-
-        const originalShowDirectoryPicker = window.showDirectoryPicker
-        const mockDirHandle = {
-            queryPermission: vi.fn().mockResolvedValue('granted'),
-            requestPermission: vi.fn().mockResolvedValue('granted'),
-            getFileHandle: vi.fn().mockImplementation(async (name: string) => mockFileHandle(name)),
-        }
-        window.showDirectoryPicker = vi.fn().mockResolvedValue(mockDirHandle)
-
-        try {
-            const screen = render(html`<record-list></record-list>`)
-            const el = screen.container.querySelector('record-list')!
-            await elementUpdated(el)
-
-            await vi.waitFor(() => {
-                expect(shadowQuery(el, 'md-list-item')).not.toBeNull()
             })
 
-            // Select the record
-            const checkbox = shadowQuery(el, 'md-checkbox') as HTMLElement
-            checkbox.click()
-            await elementUpdated(el)
-
-            // Verify Save chip is enabled
-            const saveChip = shadowQuery(el, 'md-assist-chip[label="Save"]') as HTMLElement
-            expect(saveChip.hasAttribute('disabled')).toBe(false)
-
-            // Trigger saveSelectedRecords
-            const savePromise = (el as any).saveSelectedRecords()
-
-            await vi.waitFor(() => {
-                const dialog = shadowQuery(el, '#download-dialog')
-                expect(dialog).not.toBeNull()
+            // Mock window.showDirectoryPicker
+            const writtenFiles = new Map<string, string>()
+            const mockFileHandle = (name: string) => ({
+                createWritable: vi.fn().mockImplementation(async () => {
+                    const chunks: Uint8Array[] = []
+                    return new WritableStream<Uint8Array>({
+                        write(chunk) {
+                            chunks.push(chunk)
+                        },
+                        close() {
+                            const str = chunks.map(c => new TextDecoder().decode(c)).join('')
+                            writtenFiles.set(name, str)
+                        },
+                    })
+                }),
             })
 
-            // Wait for save to complete
-            await savePromise
-            await elementUpdated(el)
+            const originalShowDirectoryPicker = window.showDirectoryPicker
+            const mockDirHandle = {
+                queryPermission: vi.fn().mockResolvedValue('granted'),
+                requestPermission: vi.fn().mockResolvedValue('granted'),
+                getFileHandle: vi.fn().mockImplementation(async (name: string) => mockFileHandle(name)),
+            }
+            window.showDirectoryPicker = vi.fn().mockResolvedValue(mockDirHandle)
 
-            // Check that all 4 files were written
-            expect(writtenFiles.has(mainPath)).toBe(true)
-            expect(writtenFiles.has(tabPath)).toBe(true)
-            expect(writtenFiles.has(`video-${ts}.vtt`)).toBe(true)
-            expect(writtenFiles.has(`video-${ts}-summary.md`)).toBe(true)
+            try {
+                const screen = render(html`<record-list></record-list>`)
+                const el = screen.container.querySelector('record-list')!
+                await elementUpdated(el)
 
-            // Check contents
-            expect(writtenFiles.get(`video-${ts}.vtt`)).toContain('WEBVTT')
-            expect(writtenFiles.get(`video-${ts}.vtt`)).toContain('Hello world')
-            expect(writtenFiles.get(`video-${ts}-summary.md`)).toBe('# Summary content')
+                await vi.waitFor(() => {
+                    expect(shadowQuery(el, 'md-list-item')).not.toBeNull()
+                })
 
-            // Dialog should be closed after completion
-            const dialog = shadowQuery(el, '#download-dialog') as HTMLElement | null
-            expect((dialog as any)?.open).toBe(false)
-        } finally {
-            window.showDirectoryPicker = originalShowDirectoryPicker
-        }
-    })
+                // Select the record
+                const checkbox = shadowQuery(el, 'md-checkbox') as HTMLElement
+                checkbox.click()
+                await elementUpdated(el)
+
+                // Verify Save chip is enabled
+                const saveChip = shadowQuery(el, 'md-assist-chip[label="Save"]') as HTMLElement
+                expect(saveChip.hasAttribute('disabled')).toBe(false)
+
+                // Trigger saveSelectedRecords
+                const savePromise = (el as any).saveSelectedRecords()
+
+                await vi.waitFor(() => {
+                    const dialog = shadowQuery(el, '#download-dialog')
+                    expect(dialog).not.toBeNull()
+                })
+
+                // Wait for save to complete
+                await savePromise
+                await elementUpdated(el)
+
+                // Check that all 4 files were written
+                expect(writtenFiles.has(meetingTitle ?? mainPath)).toBe(true)
+                expect(writtenFiles.has(tabPath)).toBe(true)
+                expect(writtenFiles.has(`video-${ts}.vtt`)).toBe(true)
+                expect(writtenFiles.has(`video-${ts}-summary.md`)).toBe(true)
+
+                // Check contents
+                expect(writtenFiles.get(`video-${ts}.vtt`)).toContain('WEBVTT')
+                expect(writtenFiles.get(`video-${ts}.vtt`)).toContain('Hello world')
+                expect(writtenFiles.get(`video-${ts}-summary.md`)).toBe('# Summary content')
+
+                // Dialog should be closed after completion
+                const dialog = shadowQuery(el, '#download-dialog') as HTMLElement | null
+                expect((dialog as any)?.open).toBe(false)
+            } finally {
+                window.showDirectoryPicker = originalShowDirectoryPicker
+            }
+        },
+    )
 
     test('download dialog prevents cancellation on cancel/escape and supports cancel button', async () => {
         const ts = '1000000000000'

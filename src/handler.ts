@@ -570,7 +570,13 @@ export async function handleApiRequest(
                 }
                 // Add Content-Disposition header only when download=true is specified
                 if (url.searchParams.get('download') === 'true') {
-                    const encodedName = encodeURIComponent(name).replace(/'/g, '%27')
+                    let downloadName = name
+                    const recordedAt = parseRecordedAt(name)
+                    if (recordedAt != null) {
+                        const record = await recordingDB.get(recordedAt)
+                        if (record?.mainFilePath === name && record.title) downloadName = record.title
+                    }
+                    const encodedName = encodeURIComponent(downloadName).replace(/'/g, '%27')
                     headers['Content-Disposition'] = `attachment; filename*=UTF-8''${encodedName}`
                 }
 

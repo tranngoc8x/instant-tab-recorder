@@ -24,7 +24,8 @@
         "offscreen",
         "storage",
         "unlimitedStorage",
-        "contextMenus"
+        "contextMenus",
+        "activeTab"
     ],
     "options_page": "option.html",
     "content_security_policy": {
@@ -47,5 +48,16 @@
         "open-option-page": {
             "description": "__MSG_commandOpenOptionPage__"
         }
-    }
+    },
+    "content_scripts": [
+        {
+            "matches": [
+                "https://meet.google.com/*"
+            ],
+            "js": [
+                "dist/meet_content.js"
+            ],
+            "run_at": "document_idle"
+        }
+    ]
 }

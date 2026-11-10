@@ -39,6 +39,7 @@ export default defineConfig(({ mode }) => ({
         emptyOutDir: true,
         rolldownOptions: {
             input: {
+                meet_content: path.resolve(import.meta.dirname, 'src/meet/content.ts'),
                 offscreen: path.resolve(import.meta.dirname, 'src/offscreen.ts'),
                 option: path.resolve(import.meta.dirname, 'src/option.ts'),
                 service_worker: path.resolve(import.meta.dirname, 'src/service_worker.ts'),

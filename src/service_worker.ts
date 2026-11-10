@@ -1,3 +1,4 @@
+import { MeetController, meetingKey, type MeetSession, type MeetState } from './meet/controller'
 import type { getMediaStreamId } from './type'
 import type {
     Trigger,
@@ -149,6 +150,71 @@ async function setRecordingState(state: RecordingState) {
     await chrome.storage.local.set({ [recordingStateKey]: state })
 }
 
+const meetSessionKey = 'meetRecordingSession'
+const meetController = new MeetController({
+    read: async () => (await chrome.storage.session.get(meetSessionKey))[meetSessionKey] as MeetSession | undefined,
+    write: async value => {
+        if (value) await chrome.storage.session.set({ [meetSessionKey]: value })
+        else await chrome.storage.session.remove(meetSessionKey)
+        if (value?.status === 'armed' || value?.status === 'error') {
+            await chrome.action.setBadgeText({ text: value.status === 'armed' ? 'WAIT' : '!' })
+        } else {
+            await updateBadge(await getRecordingState())
+        }
+    },
+    isRecording: getIsRecording,
+    start: async (tab, title) => {
+        if (tab.id == null) return
+        const current = await chrome.tabs.get(tab.id)
+        if (meetingKey(current.url) !== meetingKey(tab.url)) throw new Error('The meeting tab has changed.')
+        await startRecording(current, 'action-icon', title)
+    },
+})
+
+// Only top-frame messages from the actual Meet tab may drive the armed recording.
+chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
+    if (message?.type !== 'meet-state') return
+    if (sender.id !== chrome.runtime.id || sender.frameId !== 0 || !sender.tab || !meetingKey(sender.url)) return
+    if (typeof message.joined !== 'boolean' || typeof message.title !== 'string') return
+    void meetController
+        .update({ ...sender.tab, url: sender.url }, message)
+        .then(async result => {
+            const isPaused = result.status === 'recording' && (await getRecordingState()).isPaused === true
+            sendResponse({ ...result, isPaused })
+        })
+        .catch(() => {
+            sendResponse({ status: 'error', error: 'Recording failed. Click the extension to try again.' })
+        })
+    return true
+})
+
+chrome.tabs.onRemoved.addListener(tabId => {
+    void meetController.clearForTab(tabId).catch(console.error)
+})
+
+chrome.tabs.onUpdated.addListener((tabId, change) => {
+    if (change.url) void meetController.clearForTab(tabId, change.url).catch(console.error)
+})
+
+async function startOrArmRecording(tab: chrome.tabs.Tab, trigger: StartTrigger) {
+    if (!meetingKey(tab.url) || tab.id == null) {
+        await meetController.clear()
+        await startRecording(tab, trigger)
+        return
+    }
+    const stored = (await chrome.storage.session.get(meetSessionKey))[meetSessionKey] as MeetSession | undefined
+    if (stored?.tabId === tab.id && stored.status === 'armed') {
+        await meetController.clear()
+        return
+    }
+    // Query before arming, so a tab opened before extension installation cannot silently wait forever.
+    const state: MeetState = await chrome.tabs.sendMessage(tab.id, { type: 'meet-query' })
+    if (typeof state?.joined !== 'boolean' || typeof state?.title !== 'string')
+        throw new Error('Reload the Google Meet tab and try again.')
+    await meetController.arm(tab)
+    await meetController.update(tab, state)
+}
+
 // Action icon handler
 chrome.action.onClicked.addListener(async (tab: chrome.tabs.Tab) => {
     const trigger = 'action-icon'
@@ -157,7 +223,7 @@ chrome.action.onClicked.addListener(async (tab: chrome.tabs.Tab) => {
             await stopRecording(trigger)
             return
         }
-        await startRecording(tab, trigger)
+        await startOrArmRecording(tab, trigger)
     } catch (e) {
         console.error(e)
         const msg: ExceptionMessage = {
@@ -186,7 +252,7 @@ chrome.contextMenus.onClicked.addListener(async (info: chrome.contextMenus.OnCli
             await stopRecording(trigger)
             return
         }
-        await startRecording(tab, trigger)
+        await startOrArmRecording(tab, trigger)
     } catch (e) {
         console.error(e)
         const msg: ExceptionMessage = {
@@ -205,7 +271,7 @@ chrome.commands.onCommand.addListener(async (command: string, tab?: chrome.tabs.
             case 'start-recording': {
                 if (!tab) return
                 if (await getIsRecording()) return
-                await startRecording(tab, trigger)
+                await startOrArmRecording(tab, trigger)
                 break
             }
             case 'stop-recording': {
@@ -219,7 +285,7 @@ chrome.commands.onCommand.addListener(async (command: string, tab?: chrome.tabs.
                     return
                 }
                 if (!tab) return
-                await startRecording(tab, trigger)
+                await startOrArmRecording(tab, trigger)
                 break
             }
             case 'toggle-pause-recording': {
@@ -247,7 +313,7 @@ chrome.commands.onCommand.addListener(async (command: string, tab?: chrome.tabs.
     }
 })
 
-async function startRecording(tab: chrome.tabs.Tab, trigger: StartTrigger) {
+async function startRecording(tab: chrome.tabs.Tab, trigger: StartTrigger, meetingTitle?: string) {
     await createOffscreenDocument()
 
     // Get a MediaStream for the active tab.
@@ -265,6 +331,7 @@ async function startRecording(tab: chrome.tabs.Tab, trigger: StartTrigger) {
         data: {
             tabSize: screenSize,
             streamId,
+            meetingTitle,
         },
     }
     const response: StartRecordingResponse | undefined = await chrome.runtime.sendMessage(msg)
@@ -303,6 +370,8 @@ async function stopRecording(trigger: Trigger, skipConfirmation = false) {
             }
         }
     }
+
+    await meetController.clear()
 
     // Send stop-recording message to offscreen document
     const msg: StopRecordingMessage = {

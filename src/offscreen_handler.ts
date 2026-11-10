@@ -1,3 +1,4 @@
+import { meetingFilename } from './meeting_filename'
 import type { Configuration, RecordingInfo, Resolution, CropRegion } from './configuration'
 import type {
     Message,
@@ -60,6 +61,7 @@ export class OffscreenHandler {
     private timerStopAtMs: number | null = null
     private timerRemainingMs: number | null = null
     private currentRecordingStartAtMs: number | null = null
+    private currentRecordingTitle: string | null = null
 
     constructor(private readonly deps: OffscreenDeps) {}
 
@@ -143,12 +145,13 @@ export class OffscreenHandler {
             },
         })
 
+        const isMeeting = data.meetingTitle !== undefined
         const response = await this.deps.session.start(data, {
-            videoFormat,
+            videoFormat: isMeeting ? { ...videoFormat, recordingMode: 'audio-only' } : videoFormat,
             recordingSize,
             microphone: config.microphone,
             cropping: config.cropping,
-            muteRecordingTab: config.muteRecordingTab,
+            muteRecordingTab: isMeeting ? false : config.muteRecordingTab,
             audioSeparation: config.audioSeparation,
         })
 
@@ -169,12 +172,13 @@ export class OffscreenHandler {
 
         // Write initial record to IndexedDB
         this.currentRecordingStartAtMs = response.startAtMs
+        this.currentRecordingTitle = meetingFilename(data.meetingTitle, response.startAtMs, response.mainFilePath)
         try {
             const record: RecordingRecord = {
                 recordedAt: response.startAtMs,
                 mainFilePath: response.mainFilePath,
                 mimeType: response.mimeType,
-                title: response.mainFilePath,
+                title: this.currentRecordingTitle,
                 status: 'recording',
                 durationMs: null,
                 fileSize: 0,
@@ -211,7 +215,7 @@ export class OffscreenHandler {
                         recordedAt: result.startAtMs,
                         mainFilePath: result.mainFilePath,
                         mimeType: result.mimeType,
-                        title: result.mainFilePath,
+                        title: this.currentRecordingTitle ?? result.mainFilePath,
                         status: 'completed',
                         durationMs: result.durationMs,
                         fileSize: result.fileSize,
@@ -239,6 +243,7 @@ export class OffscreenHandler {
             this.deps.sendException(e, { exceptionSource: 'offscreen.stopRecording' })
         } finally {
             this.currentRecordingStartAtMs = null
+            this.currentRecordingTitle = null
             this.clearRecordingTimer()
             this.deps.setLocationHash('')
         }
@@ -270,6 +275,7 @@ export class OffscreenHandler {
                 }
                 this.currentRecordingStartAtMs = null
             }
+            this.currentRecordingTitle = null
             this.clearRecordingTimer()
             this.deps.setLocationHash('')
         }

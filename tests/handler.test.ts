@@ -490,6 +490,35 @@ describe('handleApiRequest – recording GET (full response)', () => {
         expect(res.headers.has('Content-Disposition')).toBe(false)
     })
 
+    it('exports a recording using its meeting title while reading the stable storage path', async () => {
+        const storage = createMockStorage({
+            getFile: vi.fn().mockResolvedValue(createFile('audio', 'video-1000.webm', 'audio/webm')),
+        })
+        const recordingDB = createMockRecordingDB({
+            get: vi.fn().mockResolvedValue({
+                recordedAt: 1000,
+                mainFilePath: 'video-1000.webm',
+                title: 'Họp nhóm_1000.webm',
+                mimeType: 'audio/webm',
+                status: 'completed',
+                durationMs: 1000,
+                fileSize: 5,
+                subFiles: [],
+            }),
+        })
+        const res = await handleApiRequest(
+            new Request('https://ext.example/api/recordings/video-1000.webm?download=true'),
+            storage,
+            { isRecording: false },
+            recordingDB,
+        )
+        expect(res.headers.get('Content-Disposition')).toBe(
+            "attachment; filename*=UTF-8''H%E1%BB%8Dp%20nh%C3%B3m_1000.webm",
+        )
+        expect(await res.text()).toBe('audio')
+        expect(storage.getFile).toHaveBeenCalledWith('video-1000.webm')
+    })
+
     it('should add Content-Disposition when download=true', async () => {
         const file = createFile('data', 'my video.mp4', 'video/mp4')
         const storage = createMockStorage({

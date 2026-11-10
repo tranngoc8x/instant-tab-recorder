@@ -103,6 +103,59 @@ function createMockDeps(overrides: Partial<OffscreenDeps> = {}): OffscreenDeps {
 // ---------- start-recording ----------
 
 describe('start-recording', () => {
+    it('keeps the meeting filename through completion while retaining the internal storage path', async () => {
+        const deps = createMockDeps()
+        const handler = new OffscreenHandler(deps)
+        await handler.handleMessage({
+            type: 'start-recording',
+            data: { tabSize: { width: 1280, height: 720 }, streamId: 'stream-1', meetingTitle: 'Họp nhóm' },
+            trigger: 'action-icon',
+        })
+        await handler.handleMessage({ type: 'stop-recording', trigger: 'action-icon' })
+        expect(deps.recordingDB.put).toHaveBeenNthCalledWith(
+            1,
+            expect.objectContaining({
+                title: 'Họp nhóm_1970-01-01_00-00-01-000.webm',
+                mainFilePath: 'video-1000.webm',
+                status: 'recording',
+            }),
+        )
+        expect(deps.recordingDB.put).toHaveBeenNthCalledWith(
+            2,
+            expect.objectContaining({
+                title: 'Họp nhóm_1970-01-01_00-00-01-000.webm',
+                mainFilePath: 'video-1000.webm',
+                status: 'completed',
+            }),
+        )
+    })
+
+    it('records Meet audio without muting the meeting or modifying saved preferences', async () => {
+        const config = new Configuration()
+        config.muteRecordingTab = true
+        const format = { ...config.videoFormat }
+        const deps = createMockDeps({
+            getConfiguration: () => config,
+            getRecordingInfo: () => ({ videoFormat: config.videoFormat, recordingSize: { width: 1280, height: 720 } }),
+        })
+        const handler = new OffscreenHandler(deps)
+        await handler.handleMessage({
+            type: 'start-recording',
+            data: { tabSize: { width: 1280, height: 720 }, streamId: 'stream-1', meetingTitle: 'Daily' },
+            trigger: 'action-icon',
+        })
+        expect(deps.session.start).toHaveBeenCalledWith(
+            expect.anything(),
+            expect.objectContaining({
+                videoFormat: { ...format, recordingMode: 'audio-only' },
+                muteRecordingTab: false,
+                microphone: config.microphone,
+            }),
+        )
+        expect(config.videoFormat).toEqual(format)
+        expect(config.muteRecordingTab).toBe(true)
+    })
+
     it('calls getRecordingInfo with tabSize from message', async () => {
         const deps = createMockDeps()
         const handler = new OffscreenHandler(deps)

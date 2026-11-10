@@ -826,7 +826,7 @@ export class RecordList extends LitElement {
 
             // 1. Main recording file
             items.push({
-                fileName: record.path,
+                fileName: record.title,
                 url: `/api/recordings/${encodeURIComponent(record.path)}?download=true`,
                 size: record.size,
             })
