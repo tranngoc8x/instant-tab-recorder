@@ -29,8 +29,6 @@ export interface RecordingMetadata {
     hasTranscription?: boolean
     /** Whether summary is available */
     hasSummary?: boolean
-    /** Media files were removed after transcription; only transcript/summary remain */
-    audioDeleted?: boolean
 }
 
 /**

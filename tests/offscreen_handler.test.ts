@@ -1412,67 +1412,52 @@ describe('cancel-tasks-for-path', () => {
     })
 })
 
-// ---------- meeting cloud transcription ----------
+// ---------- meeting upload ----------
 
-function setupMeetingTranscription(transcription: unknown, transcribe = vi.fn().mockResolvedValue(undefined)) {
-    const summarize = vi.fn().mockResolvedValue(undefined)
-    const summarySession = { usesCloud: true, summarize, hasActiveTasks: () => false }
-    const deleteFile = vi.fn().mockResolvedValue(undefined)
-    const recordingDB = createMockRecordingDB()
-    ;(recordingDB.get as Mock).mockResolvedValue({
-        recordedAt: 1000,
-        mainFilePath: 'video-1000.webm',
-        subFiles: [{ path: 'video-1000-tab.webm', fileSize: 1, type: 'tab' }],
-        fileSize: 12345,
-        transcription,
-    })
-    const transcriptionSession = { usesCloud: true, transcribe, hasActiveTasks: () => false }
-    const deps = createMockDeps({
-        recordingDB,
-        deleteFile,
-        transcriptionSession: transcriptionSession as never,
-        summarySession: summarySession as never,
-    })
-    return { deps, deleteFile, transcribe, summarize, handler: new OffscreenHandler(deps) }
-}
-
-describe('meeting cloud transcription', () => {
+describe('meeting upload', () => {
     const meetingStart: Message = {
         type: 'start-recording',
         data: { tabSize: { width: 1280, height: 720 }, streamId: 'stream-1', meetingTitle: 'Daily' },
         trigger: 'action-icon',
     }
-    const segment = { startSec: 0, endSec: 1, text: 'xin chào' }
 
-    it('keeps only the transcript after a meeting recording is transcribed', async () => {
-        const { deps, deleteFile, transcribe, summarize, handler } = setupMeetingTranscription({ segments: [segment] })
-        await handler.handleMessage(meetingStart)
-        await handler.handleMessage({ type: 'stop-recording', trigger: 'action-icon' })
-        await vi.waitFor(() => expect(summarize).toHaveBeenCalledWith('video-1000.webm'))
-        expect(summarize.mock.invocationCallOrder[0]).toBeGreaterThan(deleteFile.mock.invocationCallOrder[1])
-        expect(transcribe).toHaveBeenCalledWith('video-1000.webm')
-        expect(deleteFile).toHaveBeenCalledWith('video-1000.webm')
-        expect(deleteFile).toHaveBeenCalledWith('video-1000-tab.webm')
-        expect(deps.recordingDB.put).toHaveBeenLastCalledWith(
-            expect.objectContaining({ audioDeleted: true, fileSize: 0, subFiles: [] }),
-        )
-    })
-
-    it.each([
-        ['an empty transcript', { segments: [{ ...segment, text: ' ' }] }, undefined],
-        ['a failed transcription', undefined, vi.fn().mockRejectedValue(new Error('401'))],
-    ])('keeps the recording after %s', async (_name, transcription, transcribe) => {
-        const { deps, deleteFile, summarize, handler } = setupMeetingTranscription(transcription, transcribe)
+    it('uploads the meeting file once, keeps it locally and closes when done', async () => {
+        const uploadMeetingAudio = vi.fn().mockResolvedValue('job-1')
+        const deps = createMockDeps({ uploadMeetingAudio })
+        const handler = new OffscreenHandler(deps)
         await handler.handleMessage(meetingStart)
         await handler.handleMessage({ type: 'stop-recording', trigger: 'action-icon' })
         await vi.waitFor(() => expect(deps.closeDocument).toHaveBeenCalled())
-        expect(deleteFile).not.toHaveBeenCalled()
-        expect(summarize).not.toHaveBeenCalled()
-        expect(deps.recordingDB.put).not.toHaveBeenCalledWith(expect.objectContaining({ audioDeleted: true }))
+        expect(deps.getVideoFile).toHaveBeenCalledWith('video-1000.webm')
+        expect(uploadMeetingAudio).toHaveBeenCalledTimes(1)
+        expect(deps.sendException).not.toHaveBeenCalled()
     })
 
-    it('does not transcribe recordings that are not meetings', async () => {
-        const { deleteFile, transcribe, handler } = setupMeetingTranscription({ segments: [segment] })
+    it('skips quietly when the gateway is not configured', async () => {
+        const deps = createMockDeps({ uploadMeetingAudio: vi.fn().mockResolvedValue(null) })
+        const handler = new OffscreenHandler(deps)
+        await handler.handleMessage(meetingStart)
+        await handler.handleMessage({ type: 'stop-recording', trigger: 'action-icon' })
+        await vi.waitFor(() => expect(deps.closeDocument).toHaveBeenCalled())
+        expect(deps.sendException).not.toHaveBeenCalled()
+    })
+
+    it('reports a failed upload', async () => {
+        const deps = createMockDeps({ uploadMeetingAudio: vi.fn().mockRejectedValue(new Error('401')) })
+        const handler = new OffscreenHandler(deps)
+        await handler.handleMessage(meetingStart)
+        await handler.handleMessage({ type: 'stop-recording', trigger: 'action-icon' })
+        await vi.waitFor(() =>
+            expect(deps.sendException).toHaveBeenCalledWith(
+                expect.any(Error),
+                expect.objectContaining({ exceptionSource: 'offscreen.meetingUpload' }),
+            ),
+        )
+    })
+
+    it('does not upload recordings that are not meetings', async () => {
+        const uploadMeetingAudio = vi.fn()
+        const handler = new OffscreenHandler(createMockDeps({ uploadMeetingAudio }))
         await handler.handleMessage({
             type: 'start-recording',
             data: { tabSize: { width: 1280, height: 720 }, streamId: 'stream-1' },
@@ -1480,7 +1465,6 @@ describe('meeting cloud transcription', () => {
         })
         await handler.handleMessage({ type: 'stop-recording', trigger: 'action-icon' })
         await Promise.resolve()
-        expect(transcribe).not.toHaveBeenCalled()
-        expect(deleteFile).not.toHaveBeenCalled()
+        expect(uploadMeetingAudio).not.toHaveBeenCalled()
     })
 })

@@ -1021,27 +1021,6 @@ describe('handleApiRequest – recording GET (self-healing)', () => {
         expect(recordingDB.delete).toHaveBeenCalledWith(1000)
     })
 
-    it('keeps transcript-only records whose media was removed on purpose', async () => {
-        const record: RecordingRecord = {
-            recordedAt: 1000,
-            mainFilePath: 'video-1000.webm',
-            mimeType: 'audio/webm',
-            title: 'Daily',
-            status: 'completed',
-            durationMs: 5000,
-            fileSize: 0,
-            subFiles: [],
-            audioDeleted: true,
-        }
-        const recordingDB = createMockRecordingDB({ get: vi.fn().mockResolvedValue(record) })
-        const storage = createMockStorage({ getFile: vi.fn().mockResolvedValue(null) })
-        const req = new Request('https://ext.example/api/recordings/video-1000.webm')
-        const res = await handleApiRequest(req, storage, { isRecording: false, startAtMs: 0 }, recordingDB)
-
-        expect(res.status).toBe(404)
-        expect(recordingDB.delete).not.toHaveBeenCalled()
-    })
-
     it('should not delete IndexedDB record when mainFilePath does not match', async () => {
         const mismatchRecord: RecordingRecord = {
             recordedAt: 1000,

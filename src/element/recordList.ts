@@ -43,8 +43,6 @@ export interface RecordEntry {
     thumbnailFileName?: string
     hasTranscription?: boolean
     hasSummary?: boolean
-    /** Media removed after transcription; title links to the transcript instead */
-    audioDeleted?: boolean
 }
 
 /**
@@ -424,9 +422,7 @@ export class RecordList extends LitElement {
     public override render() {
         const row = (record: RecordEntry, idx: number) => {
             const fileUrl = getRecordingFileUrl(record.path)
-            const downloadUrl = record.audioDeleted
-                ? `${fileUrl}/transcription.vtt?download=true`
-                : `${fileUrl}?download=true`
+            const downloadUrl = `${fileUrl}?download=true`
             return html` ${idx > 0 ? html`<md-divider></md-divider>` : ''}
                 <md-list-item class="list-item">
                     <div slot="start" class="start-slot">
@@ -650,7 +646,6 @@ export class RecordList extends LitElement {
             thumbnailFileName: meta.thumbnailFileName,
             hasTranscription: meta.hasTranscription ?? false,
             hasSummary: meta.hasSummary ?? false,
-            audioDeleted: meta.audioDeleted ?? false,
         }))
 
         const oldVal = [...this.records]
@@ -829,13 +824,12 @@ export class RecordList extends LitElement {
         for (const record of selectedRecords) {
             const baseName = record.path.replace(/\.[^.]+$/, '')
 
-            // 1. Main recording file (absent once only the transcript is kept)
-            if (!record.audioDeleted)
-                items.push({
-                    fileName: record.title,
-                    url: `/api/recordings/${encodeURIComponent(record.path)}?download=true`,
-                    size: record.size,
-                })
+            // 1. Main recording file
+            items.push({
+                fileName: record.title,
+                url: `/api/recordings/${encodeURIComponent(record.path)}?download=true`,
+                size: record.size,
+            })
 
             // 2. Sub-files (audio separation)
             for (const subFile of record.subFiles) {

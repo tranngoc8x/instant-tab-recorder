@@ -76,8 +76,5 @@ export default defineConfig(({ mode }) => ({
         'process.env.PKG_NAME': JSON.stringify(pkg.name),
         'process.env.VERSION': JSON.stringify(pkg.version),
         'process.env.ENV_NAME': JSON.stringify(envName),
-        // Cloud transcription key, taken from the shell at build time (never committed).
-        'process.env.NINEROUTER_KEY': JSON.stringify(process.env.NINEROUTER_KEY ?? ''),
-        'process.env.NINEROUTER_CHAT_MODEL': JSON.stringify(process.env.NINEROUTER_CHAT_MODEL ?? ''),
     },
 }))

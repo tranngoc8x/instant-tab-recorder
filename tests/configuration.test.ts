@@ -478,6 +478,15 @@ describe('Configuration.transcription', () => {
         expect(report.summary).toEqual({ enabled: true })
     })
 
+    it('keeps gateway credentials out of sync and reports, and across restoreDefault', () => {
+        const config = new Configuration()
+        config.gateway = { url: 'https://gw.example', token: 'secret' }
+        expect('gateway' in Configuration.filterForSync(config)).toBe(false)
+        expect(JSON.stringify(Configuration.filterForReport(config))).not.toContain('secret')
+        expect(Configuration.restoreDefault(config).gateway).toEqual(config.gateway)
+        expect(new Configuration().gateway).toEqual({ url: '', token: '' })
+    })
+
     it('should exclude summary from filterForSync', () => {
         const config = new Configuration()
         config.summary = { enabled: true, prompt: 'custom prompt' }

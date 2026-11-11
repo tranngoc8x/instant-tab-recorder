@@ -1,6 +1,5 @@
 /* eslint-disable unicorn/require-post-message-target-origin */
 import type { SummaryResult, SummaryWorkerInMessage, SummaryWorkerOutMessage } from './types'
-import { buildSummaryPrompt } from './prompt'
 import { SUMMARY_MODEL_REPO } from './model_files'
 import type { TranscriptionResult } from '../transcription/types'
 import { BaseMLSession, abortable, type BaseMLSessionDeps } from '../ml/base_session'
@@ -10,8 +9,6 @@ export interface SummarySessionDeps extends BaseMLSessionDeps {
     getTranscription(path: string): Promise<TranscriptionResult | null>
     saveSummary(path: string, result: SummaryResult): Promise<void>
     getPrompt?(): string | undefined
-    /** When set, the prompt goes to a remote chat API instead of the local Gemma worker. */
-    summarizeInCloud?(prompt: string, signal: AbortSignal): Promise<Omit<SummaryResult, 'summarizedAt'>>
 }
 
 /**
@@ -25,10 +22,6 @@ export class SummarySession extends BaseMLSession<SummarySessionDeps> {
 
     isSummarizing(path: string): boolean {
         return this.isTaskActive(path)
-    }
-
-    get usesCloud(): boolean {
-        return this.deps.summarizeInCloud !== undefined
     }
 
     async summarize(path: string): Promise<void> {
@@ -48,16 +41,6 @@ export class SummarySession extends BaseMLSession<SummarySessionDeps> {
                     .trim()
                 if (!transcriptText) {
                     throw new Error('Transcription text is empty')
-                }
-
-                if (this.deps.summarizeInCloud) {
-                    const prompt = buildSummaryPrompt(transcriptText, this.deps.getPrompt?.())
-                    const result = await this.deps.summarizeInCloud(prompt, signal)
-                    signal.throwIfAborted()
-                    const summary: SummaryResult = { ...result, summarizedAt: Date.now() }
-                    await this.deps.saveSummary(path, summary)
-                    await this.deps.broadcastMessage({ type: 'summary-complete', path, summary })
-                    return
                 }
 
                 // 2. Initialize Worker

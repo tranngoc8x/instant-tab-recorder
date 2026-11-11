@@ -47,7 +47,8 @@ export interface OffscreenDeps {
     setLocationHash(hash: string): void
     recordingDB: RecordingDB
     getVideoFile(path: string): Promise<File>
-    deleteFile?(path: string): Promise<void>
+    /** Hands meeting audio to JulyGateway (transcribed and analyzed server-side); job id, or null when not configured. */
+    uploadMeetingAudio?(file: Blob): Promise<string | null>
     transcriptionSession?: TranscriptionSession
     transcriptionModelDownloader?: TranscriptionModelDownloader
     summarySession?: SummarySession
@@ -64,6 +65,7 @@ export class OffscreenHandler {
     private currentRecordingStartAtMs: number | null = null
     private currentRecordingTitle: string | null = null
     private currentIsMeeting = false
+    private pendingUploads = 0
 
     constructor(private readonly deps: OffscreenDeps) {}
 
@@ -76,7 +78,14 @@ export class OffscreenHandler {
         const isDownloading = this.deps.transcriptionModelDownloader?.isDownloading ?? false
         const isSummarizing = this.deps.summarySession?.hasActiveTasks() ?? false
         const isSummaryDownloading = this.deps.summaryModelDownloader?.isDownloading ?? false
-        return isRecording || isTranscribing || isDownloading || isSummarizing || isSummaryDownloading
+        return (
+            isRecording ||
+            isTranscribing ||
+            isDownloading ||
+            isSummarizing ||
+            isSummaryDownloading ||
+            this.pendingUploads > 0
+        )
     }
 
     /**
@@ -228,7 +237,7 @@ export class OffscreenHandler {
                         thumbnail,
                     }
                     await this.deps.recordingDB.put(record)
-                    if (isMeeting) void this.transcribeMeetingAndDropAudio(result.startAtMs, result.mainFilePath)
+                    if (isMeeting) void this.uploadMeeting(result.mainFilePath)
                 } catch (e) {
                     console.error('Failed to update IndexedDB record:', e)
                     this.deps.sendException(e, { exceptionSource: 'offscreen.stopRecording.indexedDB' })
@@ -257,29 +266,19 @@ export class OffscreenHandler {
         await this.deps.flush()
     }
 
-    /**
-     * Meeting recordings: cloud transcription, drop the audio, then cloud analysis (summary) of the transcript.
-     * Media is removed only after a non-empty transcript is stored; any failure keeps the files.
-     */
-    private async transcribeMeetingAndDropAudio(recordedAt: number, path: string): Promise<void> {
-        const { transcriptionSession, deleteFile } = this.deps
-        if (!transcriptionSession?.usesCloud || !deleteFile) return
+    /** Meeting recordings: one upload to the gateway, which does the rest. The local file is kept. */
+    private async uploadMeeting(path: string): Promise<void> {
+        const upload = this.deps.uploadMeetingAudio
+        if (!upload) return
+        this.pendingUploads++
         try {
-            await transcriptionSession.transcribe(path)
-            const record = await this.deps.recordingDB.get(recordedAt)
-            if (!record?.transcription?.segments.some(s => s.text.trim())) return
-            // Flag first: a crash mid-delete must not let orphan cleanup drop the transcript.
-            await this.deps.recordingDB.put({ ...record, audioDeleted: true, fileSize: 0, subFiles: [] })
-            await Promise.all([record.mainFilePath, ...record.subFiles.map(f => f.path)].map(p => deleteFile(p)))
-            // Analysis runs last so its record write (summary) never races the audio cleanup above.
-            if (this.deps.summarySession?.usesCloud) await this.deps.summarySession.summarize(path)
+            const jobId = await upload(await this.deps.getVideoFile(path))
+            if (jobId) console.log(`Meeting uploaded to gateway: ${path} (job ${jobId})`)
         } catch (e) {
-            console.error('Meeting cloud transcription/analysis failed:', e)
-            this.deps.sendException(e, {
-                exceptionSource: 'offscreen.meetingTranscription',
-                additionalMetadata: { path },
-            })
+            console.error('Meeting upload failed:', e)
+            this.deps.sendException(e, { exceptionSource: 'offscreen.meetingUpload', additionalMetadata: { path } })
         } finally {
+            this.pendingUploads--
             this.maybeClose()
         }
     }

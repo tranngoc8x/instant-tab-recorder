@@ -790,5 +790,14 @@
     },
     "playerSummaryNoTranscription": {
         "message": "文字起こしデータがありません。先に文字起こしを実行してください。"
+    },
+    "settingsGateway": {
+        "message": "録音アップロード API"
+    },
+    "settingsGatewayUrl": {
+        "message": "API アップロード URL"
+    },
+    "settingsGatewayToken": {
+        "message": "API キー"
     }
 }

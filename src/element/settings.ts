@@ -774,6 +774,23 @@ export class Settings extends LitElement {
                 </div>
             </section>
 
+            <section class="settings-section">
+                <h2>${t('settingsGateway')}</h2>
+                <div class="settings-group">
+                    <md-filled-text-field
+                        label=${t('settingsGatewayUrl')}
+                        type="url"
+                        placeholder="https://gateway.example.com/v1/transcriptions"
+                        .value=${live(this.config.gateway.url)}
+                        @change=${this.updateProp('gateway', 'url')}></md-filled-text-field>
+                    <md-filled-text-field
+                        label=${t('settingsGatewayToken')}
+                        type="password"
+                        .value=${live(this.config.gateway.token)}
+                        @change=${this.updateProp('gateway', 'token')}></md-filled-text-field>
+                </div>
+            </section>
+
             <!-- Experimental Section -->
             <section class="settings-section experimental-section">
                 <h2>
@@ -1128,6 +1145,17 @@ export class Settings extends LitElement {
                             if (!(e.target instanceof MdFilledTextField)) return
                             this.config[key1][key2] = e.target.value
                             break
+                    }
+                    break
+                case 'gateway':
+                    if (!(e.target instanceof MdFilledTextField)) return
+                    if (key2 === 'token') this.config.gateway.token = e.target.value.trim()
+                    if (key2 === 'url') {
+                        const url = e.target.value.trim()
+                        if (url && !URL.canParse(url)) return
+                        this.config.gateway.url = url
+                        // Host access lets the offscreen upload bypass CORS; requested here, inside the user gesture.
+                        if (url) void chrome.permissions.request({ origins: [`${new URL(url).origin}/*`] })
                     }
                     break
             }

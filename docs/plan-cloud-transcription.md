@@ -70,3 +70,30 @@ Hiện tại `GET /api/recordings/:name` thấy file mất sẽ tự xoá record
 - Bật khi build có cả `NINEROUTER_KEY` và `NINEROUTER_CHAT_MODEL`; thiếu model thì bỏ qua bước phân tích.
 - Lỗi phân tích không ảnh hưởng transcript. Chưa có nút chạy lại bằng cloud: nút Summarize trong player vẫn đòi model local đã tải.
 - Kiểm tra: 984 test pass, build OK (có/không env). Chưa gọi API thật.
+
+## Chuyển sang JulyGateway (11/11/2026)
+
+Thay cho việc gọi thẳng 9router (các mục 9router ở trên chỉ còn là lịch sử). Hợp đồng API: `docs/JULY_GATEWAY_API.md`.
+
+- `src/gateway.ts`: POST job (`Idempotency-Key` UUID, giữ nguyên khi retry lỗi mạng/429/5xx, tối đa 3 lần) rồi poll `GET /v1/jobs/{id}` mỗi 3s, timeout 30 phút; `failed` -> lỗi theo `error_code`.
+- Transcribe: body là file binary `audio/webm` (đã nén opus), không multipart, không gửi language/model (server quyết định). Không có `segments` thì dùng `result.text` làm 1 đoạn.
+- Phân tích: `POST /v1/transcript-analyses` `{transcript}`; `summary/key_points/decisions/action_items` được render Markdown (Tóm tắt / Ý chính / Quyết định / Việc cần làm) lưu vào `record.summary`. Prompt do server giữ, prompt trong Settings không còn dùng cho cloud.
+- Build: `JULY_GATEWAY_URL=... JULY_GATEWAY_TOKEN=... npm run build`. Vite tự ghi host gateway vào CSP `connect-src` và `host_permissions` của `extension/manifest.json`. Token chỉ nằm trong `extension/dist/offscreen.js` (gitignored).
+- Kiểm tra: 990 test pass, tsc/lint/format OK, build có/không env OK. Chưa gọi gateway thật.
+
+### Chỉ upload, không chờ kết quả (11/11/2026)
+
+Gateway tự phiên âm và phân tích, kết quả lưu ở server. Extension chỉ đẩy file lên rồi xong.
+
+- Bản ghi Meet giữ nguyên định dạng/bitrate trong Settings. Đã là WebM + Opus (chỉ audio) thì upload nguyên file; khác thì chuyển sang WebM/Opus trước (`toWebmOpus`, bitrate mặc định mediabunny). File > 25 MiB bị từ chối, không upload. Kết thúc họp: `POST /v1/transcriptions` file gốc 1 lần (`src/gateway.ts`). Nhận 202 là xong, không poll, không lưu transcript/summary local.
+- Retry lỗi mạng/429/5xx tối đa 3 lần, giữ nguyên `Idempotency-Key`. Lỗi được log + `sendException('offscreen.meetingUpload')`.
+- File ghi âm local được giữ nguyên.
+- Đã gỡ: nhánh cloud trong `TranscriptionSession`/`SummarySession`, `src/transcription/cloud.ts`, `src/summary/cloud.ts`, cờ `audioDeleted` và luồng xoá audio. Player transcribe/summary quay về chạy local như cũ.
+- Kiểm tra: 980 test pass, tsc/lint/format OK, build OK. Chưa gọi gateway thật.
+
+### Host + key trong Settings (11/11/2026)
+
+- Settings có mục "JulyGateway": `API upload URL` (URL đầy đủ, vd `https://<host>/v1/transcriptions`, code không tự ghép path), `API key` (password). Lưu ở `config.gateway`, thuộc `NON_SYNC_KEYS` (không sync, không vào telemetry), giữ lại khi Restore defaults. Thiếu một trong hai thì không upload.
+- Bỏ env build `JULY_GATEWAY_URL/TOKEN` và đoạn vite tự sửa manifest. Token không còn nằm trong bundle.
+- Manifest: CSP `connect-src` thêm `https:` (host do người dùng nhập), `optional_host_permissions: ["https://*/*"]`. Nhập host xong, Settings hỏi quyền truy cập đúng origin đó (tránh CORS).
+- Kiểm tra: 982 test pass, tsc/lint/format OK, build OK. Chưa thử UI Settings trên Chrome thật, chưa gọi gateway thật.

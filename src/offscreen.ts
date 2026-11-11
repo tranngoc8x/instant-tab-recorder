@@ -17,9 +17,7 @@ import { TranscriptionModelDownloader } from './transcription/model_downloader'
 import { SummarySession } from './summary/session'
 import { SummaryModelDownloader } from './summary/model_downloader'
 import { RecordingDB, parseRecordedAt } from './recording_db'
-import { OPFSStorage } from './opfs_storage'
-import { CLOUD_TRANSCRIPTION_MODEL, compressForUpload, transcribeViaApi } from './transcription/cloud'
-import { summarizeViaApi } from './summary/cloud'
+import { toWebmOpus, uploadRecording } from './gateway'
 import { errorToString } from './error'
 
 const preview = new Preview(async ({ image, width, height }) => {
@@ -66,26 +64,8 @@ const getVideoFile = async (path: string) => {
     return await fileHandle.getFile()
 }
 
-// Build-time key (shell env NINEROUTER_KEY); empty keeps the local WebGPU transcription.
-const cloudApiKey = process.env.NINEROUTER_KEY
-// Chat model id on 9router for meeting analysis; empty keeps the local Gemma summary.
-const cloudChatModel = process.env.NINEROUTER_CHAT_MODEL
-
 const transcriptionSession = new TranscriptionSession({
     getVideoFile,
-    ...(cloudApiKey
-        ? {
-              transcribeInCloud: async (file: Blob, signal: AbortSignal) => {
-                  // ponytail: language fixed to Vietnamese (single user); read Settings if others need it.
-                  const segments = await transcribeViaApi(await compressForUpload(file, signal), {
-                      apiKey: cloudApiKey,
-                      language: 'vi',
-                      signal,
-                  })
-                  return { segments, modelId: CLOUD_TRANSCRIPTION_MODEL, language: 'vietnamese' }
-              },
-          }
-        : {}),
     saveTranscription: async (path, result) => {
         const recordedAt = parseRecordedAt(path)
         if (recordedAt == null) throw new Error(`Invalid recording path: ${path}`)
@@ -109,14 +89,6 @@ const transcriptionSession = new TranscriptionSession({
 const modelDownloader = new TranscriptionModelDownloader()
 
 const summarySession = new SummarySession({
-    ...(cloudApiKey && cloudChatModel
-        ? {
-              summarizeInCloud: async (prompt: string, signal: AbortSignal) => ({
-                  text: await summarizeViaApi(prompt, { apiKey: cloudApiKey, model: cloudChatModel, signal }),
-                  modelId: cloudChatModel,
-              }),
-          }
-        : {}),
     getTranscription: async path => {
         const recordedAt = parseRecordedAt(path)
         if (recordedAt == null) throw new Error(`Invalid recording path: ${path}`)
@@ -156,7 +128,13 @@ const handler = new OffscreenHandler({
     },
     recordingDB,
     getVideoFile,
-    deleteFile: path => new OPFSStorage().delete(path),
+    // JulyGateway host + key come from Settings (device-only, never synced). Unset: no upload.
+    // Upload as-is when already WebM/Opus; convert otherwise (gateway accepts only audio/webm).
+    uploadMeetingAudio: async (file: Blob) => {
+        const { url, token } = Settings.getConfiguration().gateway
+        if (!url.trim() || !token.trim()) return null
+        return uploadRecording(await toWebmOpus(file), { url: url.trim(), token: token.trim() })
+    },
     transcriptionSession,
     transcriptionModelDownloader: modelDownloader,
     summarySession,

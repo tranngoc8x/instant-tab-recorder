@@ -12,8 +12,6 @@ export interface TranscriptionSessionDeps extends BaseMLSessionDeps {
     saveTranscription(path: string, result: TranscriptionResult): Promise<void>
     sendEvent(event: Event): void
     getLanguage?(): Promise<string>
-    /** When set, transcription is delegated to a remote API instead of the local WebGPU worker. */
-    transcribeInCloud?(audio: Blob, signal: AbortSignal): Promise<Omit<TranscriptionResult, 'transcribedAt'>>
 }
 
 /**
@@ -28,22 +26,10 @@ export class TranscriptionSession extends BaseMLSession<TranscriptionSessionDeps
         return this.isTaskActive(path)
     }
 
-    get usesCloud(): boolean {
-        return this.deps.transcribeInCloud !== undefined
-    }
-
     async transcribe(path: string, options?: { language?: string }): Promise<void> {
         return this.runTask(
             path,
             async (signal, setWorker) => {
-                if (this.deps.transcribeInCloud) {
-                    const file = await abortable(this.deps.getVideoFile(path), signal)
-                    const result = await this.deps.transcribeInCloud(file, signal)
-                    signal.throwIfAborted()
-                    await this.deps.saveTranscription(path, { ...result, transcribedAt: Date.now() })
-                    await this.deps.broadcastMessage({ type: 'transcription-complete', path })
-                    return
-                }
                 const totalStart = performance.now()
 
                 // 1. Audio extraction via Mediabunny (cancellable before Worker is created)

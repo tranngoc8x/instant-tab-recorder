@@ -1026,5 +1026,17 @@
     "playerSummaryNoTranscription": {
         "message": "No transcription found. Please transcribe the recording first.",
         "description": "Notice when there is no transcription data to summarize"
+    },
+    "settingsGateway": {
+        "message": "Recording upload API",
+        "description": "Settings section: API that recordings are uploaded to"
+    },
+    "settingsGatewayUrl": {
+        "message": "API upload URL",
+        "description": "JulyGateway upload endpoint URL"
+    },
+    "settingsGatewayToken": {
+        "message": "API key",
+        "description": "JulyGateway application API key"
     }
 }

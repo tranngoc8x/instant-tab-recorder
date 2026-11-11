@@ -290,7 +290,8 @@ export function isAudioOnly(mode: VideoRecordingMode): boolean {
 }
 
 // Configuration keys excluded from sync storage (device-specific settings)
-export const NON_SYNC_KEYS = ['microphone', 'cropping', 'transcription', 'summary'] as const
+// gateway holds an API token: kept on this device only, never synced or reported.
+export const NON_SYNC_KEYS = ['microphone', 'cropping', 'transcription', 'summary', 'gateway'] as const
 export type NonSyncKey = (typeof NON_SYNC_KEYS)[number]
 
 export function isSyncTarget(key: string): boolean {
@@ -327,6 +328,12 @@ export interface SummaryConfig {
     prompt: string
 }
 
+/** JulyGateway (docs/JULY_GATEWAY_API.md): `url` is the full upload endpoint; meetings upload only when both are set. */
+export interface GatewaySettings {
+    url: string
+    token: string
+}
+
 export type RecordingTimerReport = { enabled: boolean; durationMinutes?: number; skipStopConfirmation?: boolean }
 
 export type ConfigurationReport = Pick<
@@ -361,6 +368,7 @@ export class Configuration {
     hasAgreedTerms: boolean
     transcription: Transcription
     summary: SummaryConfig
+    gateway: GatewaySettings
     constructor() {
         this.windowSize = {
             width: 1920,
@@ -423,14 +431,16 @@ export class Configuration {
             enabled: false,
             prompt: DEFAULT_SUMMARY_PROMPT,
         }
+        this.gateway = { url: '', token: '' }
     }
-    static restoreDefault({ hasAgreedTerms = false }: Partial<Configuration> = {}): Configuration {
+    static restoreDefault({ hasAgreedTerms = false, gateway }: Partial<Configuration> = {}): Configuration {
         const config = new Configuration()
-        return { ...config, hasAgreedTerms }
+        // Keep the gateway credentials: they are not a preference and cannot be re-synced.
+        return { ...config, hasAgreedTerms, gateway: gateway ?? config.gateway }
     }
     static filterForSync(config: Configuration): SyncConfiguration {
-        // Exclude microphone, cropping, transcription, and summary from sync as it depends on device-specific information
-        const { microphone: _m, cropping: _c, transcription: _t, summary: _s, ...rest } = config
+        // Exclude device-specific settings and the gateway token from sync
+        const { microphone: _m, cropping: _c, transcription: _t, summary: _s, gateway: _g, ...rest } = config
         return { ...rest }
     }
     static filterForReport(config: Configuration): ConfigurationReport {
