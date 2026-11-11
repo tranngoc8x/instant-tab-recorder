@@ -9,5 +9,6 @@ describe('Meet recording indicator', () => {
     it('explains waiting and capture errors', () => {
         expect(meetStatusLabel({ status: 'armed' })).toContain('waiting')
         expect(meetStatusLabel({ status: 'error' })).toContain('retry')
+        expect(meetStatusLabel({ status: 'requested' })).toContain('Click the extension icon once')
     })
 })

@@ -1,5 +1,6 @@
 import { meetStatusLabel } from './status'
 import { readMeetState } from './detection'
+import { showRecordPrompt } from './prompt'
 
 const query = () => readMeetState(document, location.pathname)
 
@@ -16,6 +17,9 @@ if (/^\/[a-z]{3}-[a-z]{4}-[a-z]{3}\/?$/.test(location.pathname)) {
     document.documentElement.append(host)
     let stopped = false
     let pending = false
+    // undefined: not asked yet; null: prompt is open or no longer relevant.
+    let choice: boolean | null | undefined
+    let closePrompt: (() => void) | undefined
     chrome.runtime.onMessage.addListener((message, _sender, respond) => {
         if (message?.type === 'meet-query') respond(query())
     })
@@ -25,12 +29,30 @@ if (/^\/[a-z]{3}-[a-z]{4}-[a-z]{3}\/?$/.test(location.pathname)) {
         try {
             const result = await chrome.runtime.sendMessage({ type: 'meet-state', ...query() })
             if (!result) return
-            label.textContent = meetStatusLabel(result)
-            label.style.background = result.status === 'recording' && !result.isPaused ? '#a50e0e' : '#202124'
+            if (result.status !== 'idle') {
+                // Extension was invoked (armed/recording/error): the prompt's job is done.
+                closePrompt?.()
+                choice = null
+            } else if (choice === undefined) {
+                choice = null
+                closePrompt = showRecordPrompt(root, record => {
+                    choice = record
+                    void report()
+                })
+            }
+            const requested = result.status === 'idle' && choice === true
+            label.textContent = meetStatusLabel(requested ? { status: 'requested' } : result)
+            // Amber, not red: nothing is captured until the extension icon is clicked.
+            label.style.background = requested
+                ? '#b06000'
+                : result.status === 'recording' && !result.isPaused
+                  ? '#a50e0e'
+                  : '#202124'
         } catch {
             // Extension reload invalidates this world; ask for a page reload rather than polling forever.
             stopped = true
             clearInterval(timer)
+            closePrompt?.()
             label.textContent = 'Meet recorder disconnected. Reload this tab to enable recording.'
         } finally {
             pending = false
@@ -43,6 +65,7 @@ if (/^\/[a-z]{3}-[a-z]{4}-[a-z]{3}\/?$/.test(location.pathname)) {
         () => {
             stopped = true
             clearInterval(timer)
+            closePrompt?.()
         },
         { once: true },
     )

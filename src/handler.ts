@@ -218,6 +218,7 @@ export async function handleApiRequest(
                             subFilesSize,
                             hasTranscription: (r.transcription?.segments?.length ?? 0) > 0,
                             hasSummary: (r.summary?.text?.length ?? 0) > 0,
+                            ...(r.audioDeleted ? { audioDeleted: true } : {}),
                             ...(thumbnailFileName ? { thumbnailFileName } : {}),
                         }
                     }),
@@ -552,7 +553,8 @@ export async function handleApiRequest(
                     if (recordedAt != null) {
                         try {
                             const orphan = await recordingDB.get(recordedAt)
-                            if (orphan && orphan.mainFilePath === name) {
+                            // Transcript-only records intentionally have no media file.
+                            if (orphan && orphan.mainFilePath === name && !orphan.audioDeleted) {
                                 await recordingDB.delete(recordedAt)
                             }
                         } catch (e) {

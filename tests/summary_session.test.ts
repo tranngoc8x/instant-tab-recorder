@@ -66,6 +66,22 @@ describe('SummarySession', () => {
         }
     })
 
+    it('sends the built prompt to the cloud model instead of starting a worker', async () => {
+        deps.getPrompt = vi.fn().mockReturnValue('Analyze the meeting')
+        deps.summarizeInCloud = vi.fn().mockResolvedValue({ text: 'Tóm tắt', modelId: 'cloud-model' })
+        const session = new SummarySession(deps)
+        await session.summarize('video-1.webm')
+        expect(deps.createWorker).not.toHaveBeenCalled()
+        const prompt = (deps.summarizeInCloud as ReturnType<typeof vi.fn>).mock.calls[0][0] as string
+        expect(prompt).toContain('Analyze the meeting')
+        expect(prompt).toContain('First segment.\nSecond segment.')
+        expect(deps.saveSummary).toHaveBeenCalledWith(
+            'video-1.webm',
+            expect.objectContaining({ text: 'Tóm tắt', modelId: 'cloud-model' }),
+        )
+        expect(deps.broadcastMessage).toHaveBeenCalledWith(expect.objectContaining({ type: 'summary-complete' }))
+    })
+
     it('successfully summarizes transcription, saves result, and terminates worker', async () => {
         const session = new SummarySession(deps)
         expect(session.isSummarizing('rec.webm')).toBe(false)

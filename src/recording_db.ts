@@ -51,6 +51,8 @@ export interface RecordingRecord {
     transcription?: TranscriptionResult
     /** Summary result */
     summary?: SummaryResult
+    /** Audio/video files were removed after transcription; the record keeps transcript and summary only. */
+    audioDeleted?: boolean
 }
 
 function openDB(): Promise<IDBDatabase> {

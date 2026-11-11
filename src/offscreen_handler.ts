@@ -47,6 +47,7 @@ export interface OffscreenDeps {
     setLocationHash(hash: string): void
     recordingDB: RecordingDB
     getVideoFile(path: string): Promise<File>
+    deleteFile?(path: string): Promise<void>
     transcriptionSession?: TranscriptionSession
     transcriptionModelDownloader?: TranscriptionModelDownloader
     summarySession?: SummarySession
@@ -62,6 +63,7 @@ export class OffscreenHandler {
     private timerRemainingMs: number | null = null
     private currentRecordingStartAtMs: number | null = null
     private currentRecordingTitle: string | null = null
+    private currentIsMeeting = false
 
     constructor(private readonly deps: OffscreenDeps) {}
 
@@ -152,7 +154,8 @@ export class OffscreenHandler {
             microphone: config.microphone,
             cropping: config.cropping,
             muteRecordingTab: isMeeting ? false : config.muteRecordingTab,
-            audioSeparation: config.audioSeparation,
+            // Meetings keep one mixed track (Meet tab + mic); separate channel files are skipped.
+            audioSeparation: isMeeting ? { enabled: false } : config.audioSeparation,
         })
 
         if (config.recordingTimer.enabled && config.recordingTimer.durationMinutes > 0) {
@@ -172,6 +175,7 @@ export class OffscreenHandler {
 
         // Write initial record to IndexedDB
         this.currentRecordingStartAtMs = response.startAtMs
+        this.currentIsMeeting = isMeeting
         this.currentRecordingTitle = meetingFilename(data.meetingTitle, response.startAtMs, response.mainFilePath)
         try {
             const record: RecordingRecord = {
@@ -194,6 +198,7 @@ export class OffscreenHandler {
     }
 
     private async handleStopRecording(trigger: Trigger): Promise<void> {
+        const isMeeting = this.currentIsMeeting
         try {
             const result = await this.deps.session.stop()
             if (result) {
@@ -223,6 +228,7 @@ export class OffscreenHandler {
                         thumbnail,
                     }
                     await this.deps.recordingDB.put(record)
+                    if (isMeeting) void this.transcribeMeetingAndDropAudio(result.startAtMs, result.mainFilePath)
                 } catch (e) {
                     console.error('Failed to update IndexedDB record:', e)
                     this.deps.sendException(e, { exceptionSource: 'offscreen.stopRecording.indexedDB' })
@@ -244,10 +250,38 @@ export class OffscreenHandler {
         } finally {
             this.currentRecordingStartAtMs = null
             this.currentRecordingTitle = null
+            this.currentIsMeeting = false
             this.clearRecordingTimer()
             this.deps.setLocationHash('')
         }
         await this.deps.flush()
+    }
+
+    /**
+     * Meeting recordings: cloud transcription, drop the audio, then cloud analysis (summary) of the transcript.
+     * Media is removed only after a non-empty transcript is stored; any failure keeps the files.
+     */
+    private async transcribeMeetingAndDropAudio(recordedAt: number, path: string): Promise<void> {
+        const { transcriptionSession, deleteFile } = this.deps
+        if (!transcriptionSession?.usesCloud || !deleteFile) return
+        try {
+            await transcriptionSession.transcribe(path)
+            const record = await this.deps.recordingDB.get(recordedAt)
+            if (!record?.transcription?.segments.some(s => s.text.trim())) return
+            // Flag first: a crash mid-delete must not let orphan cleanup drop the transcript.
+            await this.deps.recordingDB.put({ ...record, audioDeleted: true, fileSize: 0, subFiles: [] })
+            await Promise.all([record.mainFilePath, ...record.subFiles.map(f => f.path)].map(p => deleteFile(p)))
+            // Analysis runs last so its record write (summary) never races the audio cleanup above.
+            if (this.deps.summarySession?.usesCloud) await this.deps.summarySession.summarize(path)
+        } catch (e) {
+            console.error('Meeting cloud transcription/analysis failed:', e)
+            this.deps.sendException(e, {
+                exceptionSource: 'offscreen.meetingTranscription',
+                additionalMetadata: { path },
+            })
+        } finally {
+            this.maybeClose()
+        }
     }
 
     private async handleCancelRecording(): Promise<void> {
@@ -276,6 +310,7 @@ export class OffscreenHandler {
                 this.currentRecordingStartAtMs = null
             }
             this.currentRecordingTitle = null
+            this.currentIsMeeting = false
             this.clearRecordingTimer()
             this.deps.setLocationHash('')
         }
