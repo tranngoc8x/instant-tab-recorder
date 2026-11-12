@@ -25,3 +25,14 @@ TypeScript and lint passed. All 664 Node tests and 304 browser tests passed. The
 On each Meet meeting page that is not already armed or recording, a prompt asks "Record this meeting?" with Record / Don't record buttons. With no answer within 3 seconds, Record is selected. Record only marks intent: the banner turns amber and asks for one extension-icon click. It cannot start capture by itself because Chrome grants `tabCapture` only after the extension is invoked (action icon, context menu, or shortcut). A spike in Chromium confirmed that a click inside the page fails with "Extension has not been invoked for the current page". The same constraint rules out a record button injected into the Meet toolbar. Clicking the icon then follows the existing flow: it arms before joining, or starts immediately when already in the call.
 
 Verification: TypeScript, lint and format checks passed. All 972 tests passed. The build succeeded. A Chromium run with the built extension on a mocked Meet page showed the prompt, the countdown, and the auto-selected amber banner.
+
+## Microsoft Teams (web) (2026-11-12)
+
+Teams meetings opened in the browser (`teams.microsoft.com` / `teams.live.com`, `/light-meetings/` app reached from meeting links) use the same flow as Meet: record prompt, one extension-icon click, automatic start after joining, audio-only, upload to the recording upload API when the meeting recording ends. The Teams desktop app cannot be captured (tab capture only).
+
+- Join detection: a usable `#hangup-button` / `data-tid="calling-hangup-main-button"` (taken from the live Teams bundle); the pre-join `prejoin-join-button` does not count.
+- Title: tab title without "| Microsoft Teams", else `data-tid="call-title"`, else "Teams meeting".
+- Teams uses one path for every meeting, so the armed session is per tab (`/teams-meeting`), cleared when the tab closes or leaves `/light-meetings/`.
+- The signed-in Teams app (`/v2/`) is not covered.
+
+Verification: 993 tests pass, tsc/lint/format OK, build OK, content script still a classic script. The built extension on the real `light-meetings/launch` page shows the prompt then the amber banner; `/v2/` shows nothing. A real joined Teams call has not been exercised.

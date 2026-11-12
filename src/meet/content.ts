@@ -1,11 +1,13 @@
 import { meetStatusLabel } from './status'
-import { readMeetState } from './detection'
+import { readMeetingState } from './detection'
 import { showRecordPrompt } from './prompt'
 
-const query = () => readMeetState(document, location.pathname)
+const query = () => readMeetingState(document, location)
 
 // Isolated-world script; all page-derived strings remain text, never HTML.
-if (/^\/[a-z]{3}-[a-z]{4}-[a-z]{3}\/?$/.test(location.pathname)) {
+// Same pages as meetingKey() in ./controller (manifest limits hosts). Not imported: sharing a module with the
+// service worker would split it into a chunk, and content scripts cannot load ES module imports.
+if (/^\/[a-z]{3}-[a-z]{4}-[a-z]{3}\/?$/.test(location.pathname) || location.pathname.startsWith('/light-meetings/')) {
     const host = document.createElement('div')
     host.style.cssText = 'position:fixed;top:12px;right:12px;z-index:2147483647;pointer-events:none'
     const root = host.attachShadow({ mode: 'closed' })
@@ -53,7 +55,7 @@ if (/^\/[a-z]{3}-[a-z]{4}-[a-z]{3}\/?$/.test(location.pathname)) {
             stopped = true
             clearInterval(timer)
             closePrompt?.()
-            label.textContent = 'Meet recorder disconnected. Reload this tab to enable recording.'
+            label.textContent = 'Meeting recorder disconnected. Reload this tab to enable recording.'
         } finally {
             pending = false
         }

@@ -28,11 +28,13 @@
         "activeTab"
     ],
     "optional_host_permissions": [
-        "https://*/*"
+        "https://*/*",
+        "http://localhost/*",
+        "http://127.0.0.1/*"
     ],
     "options_page": "option.html",
     "content_security_policy": {
-        "extension_pages": "default-src 'self'; script-src 'self' 'wasm-unsafe-eval'; style-src 'unsafe-inline'; connect-src 'self' https://huggingface.co https://*.huggingface.co https://hf.co https://*.hf.co https:;",
+        "extension_pages": "default-src 'self'; script-src 'self' 'wasm-unsafe-eval'; style-src 'unsafe-inline'; connect-src 'self' https://huggingface.co https://*.huggingface.co https://hf.co https://*.hf.co https: http://localhost:* http://127.0.0.1:*;",
         "sandbox": "sandbox allow-scripts allow-forms allow-popups allow-modals; script-src 'self' 'unsafe-inline' 'unsafe-eval'; child-src 'self';"
     },
     "commands": {
@@ -55,7 +57,9 @@
     "content_scripts": [
         {
             "matches": [
-                "https://meet.google.com/*"
+                "https://meet.google.com/*",
+                "https://teams.microsoft.com/*",
+                "https://teams.live.com/*"
             ],
             "js": [
                 "dist/meet_content.js"

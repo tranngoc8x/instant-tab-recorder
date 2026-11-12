@@ -1,5 +1,5 @@
 import { describe, it, expect, vi } from 'vitest'
-import { MeetController, type MeetSession } from '../src/meet/controller'
+import { MeetController, meetingKey, type MeetSession } from '../src/meet/controller'
 
 function setup() {
     let session: MeetSession | undefined
@@ -80,5 +80,23 @@ describe('Meet auto recording', () => {
         await controller.arm(tab)
         await new MeetController(deps).update(tab, { joined: true, title: 'Daily' })
         expect(deps.start).toHaveBeenCalledTimes(1)
+    })
+})
+
+describe('Microsoft Teams meetings', () => {
+    it('recognizes the Teams web meeting app but not other Teams pages', () => {
+        expect(meetingKey('https://teams.microsoft.com/light-meetings/launch?coords=abc')).toBe('/teams-meeting')
+        expect(meetingKey('https://teams.live.com/light-meetings/launch')).toBe('/teams-meeting')
+        expect(meetingKey('https://teams.microsoft.com/v2/')).toBeUndefined()
+        expect(meetingKey('https://evil.example/light-meetings/launch')).toBeUndefined()
+    })
+    it('arms a Teams tab and starts after joining, keeping the session across in-meeting URL changes', async () => {
+        const { controller, deps } = setup()
+        const teams = { id: 9, url: 'https://teams.microsoft.com/light-meetings/launch?coords=abc' }
+        await controller.arm(teams)
+        await controller.clearForTab(9, 'https://teams.microsoft.com/light-meetings/launch?coords=xyz')
+        expect((await controller.update(teams, { joined: false, title: 'Teams meeting' })).status).toBe('armed')
+        await controller.update(teams, { joined: true, title: 'Sprint review' })
+        expect(deps.start).toHaveBeenCalledWith(teams, 'Sprint review')
     })
 })

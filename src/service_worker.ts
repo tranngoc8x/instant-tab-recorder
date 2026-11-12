@@ -210,7 +210,7 @@ async function startOrArmRecording(tab: chrome.tabs.Tab, trigger: StartTrigger) 
     // Query before arming, so a tab opened before extension installation cannot silently wait forever.
     const state: MeetState = await chrome.tabs.sendMessage(tab.id, { type: 'meet-query' })
     if (typeof state?.joined !== 'boolean' || typeof state?.title !== 'string')
-        throw new Error('Reload the Google Meet tab and try again.')
+        throw new Error('Reload the meeting tab and try again.')
     await meetController.arm(tab)
     await meetController.update(tab, state)
 }

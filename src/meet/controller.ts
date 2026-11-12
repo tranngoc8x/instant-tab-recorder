@@ -16,14 +16,23 @@ interface Deps {
     start(tab: MeetTab, title: string): Promise<void>
 }
 
+const TEAMS_ORIGINS = ['https://teams.microsoft.com', 'https://teams.live.com']
+
+/**
+ * Identifies a supported meeting page: a Google Meet room, or the Teams web meeting app (`/light-meetings/`,
+ * reached from meeting links). Teams keeps one path for every meeting, so its key is per tab, not per meeting.
+ */
 export function meetingKey(url?: string): string | undefined {
     try {
         const parsed = new URL(url ?? '')
         if (parsed.origin === 'https://meet.google.com' && /^\/[a-z]{3}-[a-z]{4}-[a-z]{3}\/?$/.test(parsed.pathname)) {
             return parsed.pathname.replace(/\/$/, '')
         }
+        if (TEAMS_ORIGINS.includes(parsed.origin) && parsed.pathname.startsWith('/light-meetings/')) {
+            return '/teams-meeting'
+        }
     } catch {
-        /* Not a Meet URL. */
+        /* Not a meeting URL. */
     }
 }
 
@@ -41,7 +50,7 @@ export class MeetController {
     arm(tab: MeetTab): Promise<void> {
         return this.serialize(async () => {
             const meeting = meetingKey(tab.url)
-            if (tab.id == null || !meeting) throw new Error('Open a Google Meet meeting first.')
+            if (tab.id == null || !meeting) throw new Error('Open a Google Meet or Microsoft Teams meeting first.')
             if (await this.deps.isRecording()) throw new Error('A recording is already running.')
             await this.deps.write({ tabId: tab.id, meeting, status: 'armed' })
         })
