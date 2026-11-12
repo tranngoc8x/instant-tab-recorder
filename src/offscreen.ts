@@ -130,10 +130,10 @@ const handler = new OffscreenHandler({
     getVideoFile,
     // JulyGateway host + key come from Settings (device-only, never synced). Unset: no upload.
     // Upload as-is when already WebM/Opus; convert otherwise (gateway accepts only audio/webm).
-    uploadMeetingAudio: async (file: Blob) => {
+    uploadMeetingAudio: async (file, meeting) => {
         const { url, token } = Settings.getConfiguration().gateway
         if (!url.trim() || !token.trim()) return null
-        return uploadRecording(await toWebmOpus(file), { url: url.trim(), token: token.trim() })
+        return uploadRecording(await toWebmOpus(file), { url: url.trim(), token: token.trim() }, meeting)
     },
     transcriptionSession,
     transcriptionModelDownloader: modelDownloader,

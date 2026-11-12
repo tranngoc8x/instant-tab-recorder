@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest'
-import { MAX_UPLOAD_BYTES, uploadRecording } from '../src/gateway'
+import { MAX_UPLOAD_BYTES, uploadRecording, uploadUrl } from '../src/gateway'
 
 const accepted = () => Response.json({ job_id: 'j1', status: 'queued' }, { status: 202 })
 const config = (fetchMock: typeof fetch) => ({
@@ -45,5 +45,32 @@ describe('JulyGateway upload', () => {
             '25 MB',
         )
         expect(fetchMock).not.toHaveBeenCalled()
+    })
+
+    it('sends meeting title and each participant as URL-encoded query params', async () => {
+        const fetchMock = vi.fn().mockResolvedValueOnce(accepted())
+        await uploadRecording(new Blob(['a']), config(fetchMock), {
+            title: 'Họp Sprint 12',
+            participants: ['Lan', 'Minh'],
+        })
+        const url = new URL(fetchMock.mock.calls[0][0])
+        expect(url.origin + url.pathname).toBe('https://gw.example/upload')
+        expect(url.searchParams.get('title')).toBe('Họp Sprint 12')
+        expect(url.searchParams.getAll('participants')).toEqual(['Lan', 'Minh'])
+        expect(fetchMock.mock.calls[0][0]).toContain('title=H%E1%BB%8Dp')
+    })
+
+    it('clips meeting info to gateway limits and drops empty or duplicate names', () => {
+        const names = [' ', 'Lan', 'Lan', ...Array.from({ length: 60 }, (_, i) => `P${i}`)]
+        const url = new URL(uploadUrl('https://gw.example/upload', { title: 'x'.repeat(250), participants: names }))
+        expect(url.searchParams.get('title')).toHaveLength(200)
+        const sent = url.searchParams.getAll('participants')
+        expect(sent).toHaveLength(50)
+        expect(sent.slice(0, 2)).toEqual(['Lan', 'P0'])
+        const emoji = new URL(uploadUrl('https://gw.example/u', { participants: ['😀'.repeat(101)] }))
+        expect(emoji.searchParams.get('participants')).toBe('😀'.repeat(100))
+        expect(uploadUrl('https://gw.example/upload', { title: '  ', participants: [] })).toBe(
+            'https://gw.example/upload',
+        )
     })
 })

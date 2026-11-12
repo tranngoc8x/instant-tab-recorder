@@ -6,7 +6,7 @@ import { ALL_FORMATS, BlobSource, BufferTarget, Conversion, Input, Output, WEBM,
  * Provider keys stay on the gateway; the extension only holds its own revocable application token.
  */
 export interface GatewayConfig {
-    /** Full upload endpoint from Settings, e.g. https://<gateway-host>/v1/transcriptions (nothing appended). */
+    /** Full upload endpoint from Settings, e.g. https://<gateway-host>/v1/transcriptions (only the meeting query string is appended). */
     url: string
     token: string
     fetch?: typeof fetch
@@ -47,19 +47,41 @@ export async function toWebmOpus(file: Blob): Promise<Blob> {
     return new Blob([target.buffer], { type: 'audio/webm' })
 }
 
+/** Gateway query-string limits for the email minutes (docs/JULY_GATEWAY_API.md). */
+const MAX_TITLE = 200
+const MAX_PARTICIPANTS = 50
+const MAX_NAME = 100
+// Code points, not UTF-16 units: the gateway counts characters, and a cut must not split an emoji.
+const clip = (text: string, max: number) => [...text.trim()].slice(0, max).join('')
+
+/** Upload URL with optional `title` and repeated `participants` params (URL-encoded, clipped to gateway limits). */
+export function uploadUrl(base: string, meeting?: { title?: string; participants?: string[] }): string {
+    const url = new URL(base)
+    const title = clip(meeting?.title ?? '', MAX_TITLE)
+    if (title) url.searchParams.set('title', title)
+    const names = [...new Set((meeting?.participants ?? []).map(name => clip(name, MAX_NAME)).filter(Boolean))]
+    for (const name of names.slice(0, MAX_PARTICIPANTS)) url.searchParams.append('participants', name)
+    return url.href
+}
+
 /**
  * Uploads audio to the configured upload URL (`POST /v1/transcriptions` in the gateway docs) and returns the gateway job id once accepted (HTTP 202).
  * Network errors, 429 and 5xx are retried with the same idempotency key so a lost response never duplicates the job.
  */
-export async function uploadRecording(audio: Blob, config: GatewayConfig): Promise<string> {
+export async function uploadRecording(
+    audio: Blob,
+    config: GatewayConfig,
+    meeting?: { title?: string; participants?: string[] },
+): Promise<string> {
     if (audio.size > MAX_UPLOAD_BYTES) {
         throw new Error(`Audio is ${Math.round(audio.size / 1048576)} MB, above the 25 MB upload limit`)
     }
     const doFetch = config.fetch ?? fetch
+    const url = uploadUrl(config.url, meeting)
     const idempotencyKey = crypto.randomUUID()
     for (let attempt = 1; ; attempt++) {
         try {
-            const response = await doFetch(config.url, {
+            const response = await doFetch(url, {
                 method: 'POST',
                 headers: {
                     Authorization: `Bearer ${config.token}`,

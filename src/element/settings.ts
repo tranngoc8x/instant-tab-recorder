@@ -788,6 +788,16 @@ export class Settings extends LitElement {
                         type="password"
                         .value=${live(this.config.gateway.token)}
                         @change=${this.updateProp('gateway', 'token')}></md-filled-text-field>
+                    <md-filled-text-field
+                        label=${t('settingsGatewayMinMeeting')}
+                        type="number"
+                        min="0"
+                        max="600"
+                        step="1"
+                        suffix-text=${t('settingsSuffixMin')}
+                        supporting-text=${t('settingsGatewayMinMeetingHint')}
+                        .value=${live(String(this.config.gateway.minMeetingMinutes))}
+                        @change=${this.updateProp('gateway', 'minMeetingMinutes')}></md-filled-text-field>
                 </div>
             </section>
 
@@ -1150,6 +1160,11 @@ export class Settings extends LitElement {
                 case 'gateway':
                     if (!(e.target instanceof MdFilledTextField)) return
                     if (key2 === 'token') this.config.gateway.token = e.target.value.trim()
+                    if (key2 === 'minMeetingMinutes')
+                        this.config.gateway.minMeetingMinutes = Math.min(
+                            600,
+                            Math.max(0, Number.parseInt(e.target.value, 10) || 0),
+                        )
                     if (key2 === 'url') {
                         const url = e.target.value.trim()
                         if (url && !URL.canParse(url)) return

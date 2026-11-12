@@ -799,5 +799,11 @@
     },
     "settingsGatewayToken": {
         "message": "API キー"
+    },
+    "settingsGatewayMinMeeting": {
+        "message": "アップロードする会議の最短時間"
+    },
+    "settingsGatewayMinMeetingHint": {
+        "message": "これより短い会議はこのデバイスにのみ保存されます。0 ですべてアップロード。"
     }
 }

@@ -14,6 +14,7 @@ import type {
     CancelRecordingMessage,
     TelemetryEventMessage,
     CloseOffscreenIfIdleMessage,
+    MeetingParticipantsMessage,
 } from './message'
 import { TIMER_STOP_CONFIRM_PENDING_KEY, TIMER_STOP_TRIGGER_KEY } from './message'
 import { Configuration, Resolution } from './configuration'
@@ -176,9 +177,18 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     if (message?.type !== 'meet-state') return
     if (sender.id !== chrome.runtime.id || sender.frameId !== 0 || !sender.tab || !meetingKey(sender.url)) return
     if (typeof message.joined !== 'boolean' || typeof message.title !== 'string') return
+    const participants: string[] = Array.isArray(message.participants)
+        ? message.participants.filter((name: unknown) => typeof name === 'string')
+        : []
     void meetController
         .update({ ...sender.tab, url: sender.url }, message)
         .then(async result => {
+            if (result.status === 'ended') await stopMeetingRecording()
+            if (result.status === 'recording') {
+                const update: MeetingParticipantsMessage = { type: 'meeting-participants', participants }
+                // Offscreen keeps the latest list for the upload; a missing receiver is not an error here.
+                void chrome.runtime.sendMessage(update).catch(() => {})
+            }
             const isPaused = result.status === 'recording' && (await getRecordingState()).isPaused === true
             sendResponse({ ...result, isPaused })
         })
@@ -195,6 +205,11 @@ chrome.tabs.onRemoved.addListener(tabId => {
 chrome.tabs.onUpdated.addListener((tabId, change) => {
     if (change.url) void meetController.clearForTab(tabId, change.url).catch(console.error)
 })
+
+/** The recorded call was left: stop like the tab closing, no confirmation. */
+async function stopMeetingRecording() {
+    if (await getIsRecording()) await stopRecording('meeting-ended', true)
+}
 
 async function startOrArmRecording(tab: chrome.tabs.Tab, trigger: StartTrigger) {
     if (!meetingKey(tab.url) || tab.id == null) {

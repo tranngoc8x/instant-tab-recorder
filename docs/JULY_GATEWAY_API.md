@@ -29,6 +29,8 @@ Response HTTP 202 chứa `job_id`. Giữ nguyên idempotency key khi retry chín
 
 Server phiên âm trực tiếp với Groq. Task nền quét transcript mới mỗi **60 giây** và đưa vào hàng đợi phân tích qua 9router. Client không phải gửi transcript lại; dùng cùng `job_id` để lấy cả hai kết quả.
 
+Tham số tuỳ chọn qua query string (URL-encode tiếng Việt): `title` (tên cuộc họp, tối đa 200 ký tự) và `participants` lặp lại cho từng người (`&participants=Lan&participants=Minh`, tối đa 50 người, mỗi tên tối đa 100 ký tự). Gửi lại cùng `Idempotency-Key` thì server trả job cũ, giữ title cũ.
+
 Body là file binary trực tiếp, không dùng `multipart/form-data`. Chỉ nhận `Content-Type: audio/webm` (không kèm `;codecs=opus`). Bắt buộc có `Content-Length` đúng số byte; lệnh curl trên tự thêm header này.
 
 Ví dụ response khi vừa tạo job:

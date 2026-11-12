@@ -2,7 +2,7 @@
 
 Open a Google Meet meeting in Chrome and click the extension icon once. Before joining, this arms automatic recording for that meeting tab. The badge shows WAIT. Once the leave-call control is visible (you have joined), recording starts. Clicking the icon while already in the meeting starts immediately. Chrome requires invoking the extension for the tab; installing the extension alone cannot grant automatic tab capture.
 
-The in-page status shows waiting, recording, or an error. Click the extension again to cancel waiting or stop recording. Stopping does not automatically restart recording. Recording ends when you close the captured tab; leaving a call without closing the tab still requires stopping the recording. Microphone capture follows your existing microphone setting; enable it to include your own voice. Meet capture uses audio-only and keeps meeting playback audible.
+There is no in-page UI; the toolbar badge/icon shows waiting (WAIT), recording, or an error (!). Click the extension again to cancel waiting or stop recording. Stopping does not automatically restart recording. Recording stops automatically when you leave the call (the leave control disappears for ~6s) or when the tab closes. Navigating the tab elsewhere does not stop it. Microphone capture follows your existing microphone setting; enable it to include your own voice. Meet capture uses audio-only and keeps meeting playback audible.
 
 The meeting title, when available from the page title, becomes the displayed and downloaded filename with a timestamp. If Meet exposes only its meeting code, that code is used. Internal recording paths remain unchanged for database and migration compatibility. Existing recordings are unaffected.
 
@@ -36,3 +36,22 @@ Teams meetings opened in the browser (`teams.microsoft.com` / `teams.live.com`, 
 - The signed-in Teams app (`/v2/`) is not covered.
 
 Verification: 993 tests pass, tsc/lint/format OK, build OK, content script still a classic script. The built extension on the real `light-meetings/launch` page shows the prompt then the amber banner; `/v2/` shows nothing. A real joined Teams call has not been exercised.
+
+## Meeting title and participants in the upload (2026-11-12)
+
+- The gateway upload carries `title` (the meeting name used for the filename) and `participants` as query params, clipped to the gateway limits (200 / 50 × 100 code points).
+- Participants: the content script keeps every name seen since joining (union, so early leavers stay); the service worker forwards the list to offscreen while recording; the latest list goes with the upload.
+- Names come from rendered video tiles only: Meet `[data-participant-id] .notranslate`, Teams `[data-tid="participant-info-nametag"]` (from the live bundle). People never shown on screen in a large call are missed.
+- Not yet checked in a real joined Meet or Teams call; selectors are covered by fixture tests only.
+
+## Auto-stop on leave, prompt and banner removed (2026-11-12)
+
+- The in-page "Record this meeting?" prompt and status banner were removed. The prompt could not start capture (Chrome only grants `tabCapture` from the extension icon / context menu / shortcut), so it only added a click that did nothing.
+- Auto-stop: the content script reports `left` once it had joined and no leave control (Meet leave button / Teams `#hangup-button`) has been in the DOM for 3 reads in a row (~6s). Presence in the DOM, not visibility, so a modal hiding the toolbar does not stop the recording. Navigating the recorded tab off the meeting page does not stop it (by request); only leaving the call or closing the tab does. Trigger: `meeting-ended`, no timer confirmation.
+- Before this, only closing the tab stopped a recording (tab capture track ended).
+
+Verification: tsc, lint, 1002 tests, build OK, content script still classic. Not yet checked on a real Meet/Teams call.
+
+## Skip short meetings (2026-11-12)
+
+Settings → Recording upload API → "Minimum meeting length to upload" (`gateway.minMeetingMinutes`, default 3, range 0-600, 0 uploads every meeting). Shorter meeting recordings (measured without pauses) are kept locally but not uploaded. Device-only like the rest of the gateway settings (not synced). Verification: 1004 tests, tsc, lint, build OK.

@@ -1414,6 +1414,20 @@ describe('cancel-tasks-for-path', () => {
 
 // ---------- meeting upload ----------
 
+// Meetings must last at least gateway.minMeetingMinutes (default 3) to be uploaded.
+function longMeeting() {
+    const session = createMockSession()
+    vi.mocked(session.stop).mockResolvedValue({
+        startAtMs: 1000,
+        durationMs: 3 * 60_000,
+        fileSize: 12345,
+        mainFilePath: 'video-1000.webm',
+        mimeType: 'video/webm',
+        subFiles: [],
+    })
+    return session
+}
+
 describe('meeting upload', () => {
     const meetingStart: Message = {
         type: 'start-recording',
@@ -1423,7 +1437,7 @@ describe('meeting upload', () => {
 
     it('uploads the meeting file once, keeps it locally and closes when done', async () => {
         const uploadMeetingAudio = vi.fn().mockResolvedValue('job-1')
-        const deps = createMockDeps({ uploadMeetingAudio })
+        const deps = createMockDeps({ uploadMeetingAudio, session: longMeeting() })
         const handler = new OffscreenHandler(deps)
         await handler.handleMessage(meetingStart)
         await handler.handleMessage({ type: 'stop-recording', trigger: 'action-icon' })
@@ -1433,8 +1447,19 @@ describe('meeting upload', () => {
         expect(deps.sendException).not.toHaveBeenCalled()
     })
 
+    it('sends the meeting title and the latest participant list with the upload', async () => {
+        const uploadMeetingAudio = vi.fn().mockResolvedValue('job-1')
+        const handler = new OffscreenHandler(createMockDeps({ uploadMeetingAudio, session: longMeeting() }))
+        await handler.handleMessage(meetingStart)
+        handler.handleMessage({ type: 'meeting-participants', participants: ['Lan'] })
+        handler.handleMessage({ type: 'meeting-participants', participants: ['Lan', 'Minh'] })
+        await handler.handleMessage({ type: 'stop-recording', trigger: 'action-icon' })
+        await vi.waitFor(() => expect(uploadMeetingAudio).toHaveBeenCalled())
+        expect(uploadMeetingAudio.mock.calls[0][1]).toEqual({ title: 'Daily', participants: ['Lan', 'Minh'] })
+    })
+
     it('skips quietly when the gateway is not configured', async () => {
-        const deps = createMockDeps({ uploadMeetingAudio: vi.fn().mockResolvedValue(null) })
+        const deps = createMockDeps({ uploadMeetingAudio: vi.fn().mockResolvedValue(null), session: longMeeting() })
         const handler = new OffscreenHandler(deps)
         await handler.handleMessage(meetingStart)
         await handler.handleMessage({ type: 'stop-recording', trigger: 'action-icon' })
@@ -1443,7 +1468,10 @@ describe('meeting upload', () => {
     })
 
     it('reports a failed upload', async () => {
-        const deps = createMockDeps({ uploadMeetingAudio: vi.fn().mockRejectedValue(new Error('401')) })
+        const deps = createMockDeps({
+            uploadMeetingAudio: vi.fn().mockRejectedValue(new Error('401')),
+            session: longMeeting(),
+        })
         const handler = new OffscreenHandler(deps)
         await handler.handleMessage(meetingStart)
         await handler.handleMessage({ type: 'stop-recording', trigger: 'action-icon' })
@@ -1455,9 +1483,30 @@ describe('meeting upload', () => {
         )
     })
 
+    it('keeps meetings shorter than 3 minutes local only', async () => {
+        const uploadMeetingAudio = vi.fn()
+        const deps = createMockDeps({ uploadMeetingAudio })
+        const handler = new OffscreenHandler(deps)
+        await handler.handleMessage(meetingStart)
+        await handler.handleMessage({ type: 'stop-recording', trigger: 'action-icon' })
+        expect(deps.recordingDB.put).toHaveBeenCalledWith(expect.objectContaining({ status: 'completed' }))
+        expect(uploadMeetingAudio).not.toHaveBeenCalled()
+    })
+
+    it('uploads short meetings when the minimum length is set to 0', async () => {
+        const uploadMeetingAudio = vi.fn().mockResolvedValue('job-1')
+        const config = new Configuration()
+        config.gateway.minMeetingMinutes = 0
+        const deps = createMockDeps({ uploadMeetingAudio, getConfiguration: vi.fn().mockReturnValue(config) })
+        const handler = new OffscreenHandler(deps)
+        await handler.handleMessage(meetingStart)
+        await handler.handleMessage({ type: 'stop-recording', trigger: 'action-icon' })
+        await vi.waitFor(() => expect(uploadMeetingAudio).toHaveBeenCalledTimes(1))
+    })
+
     it('does not upload recordings that are not meetings', async () => {
         const uploadMeetingAudio = vi.fn()
-        const handler = new OffscreenHandler(createMockDeps({ uploadMeetingAudio }))
+        const handler = new OffscreenHandler(createMockDeps({ uploadMeetingAudio, session: longMeeting() }))
         await handler.handleMessage({
             type: 'start-recording',
             data: { tabSize: { width: 1280, height: 720 }, streamId: 'stream-1' },

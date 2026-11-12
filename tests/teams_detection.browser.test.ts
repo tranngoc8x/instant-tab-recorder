@@ -39,7 +39,9 @@ describe('Microsoft Teams detection', () => {
         fixture.innerHTML = '<button id="hangup-button">Leave</button>'
         expect(readMeetingState(document, { hostname: 'meet.google.com', pathname: '/abc-defg-hij' })).toEqual({
             joined: false,
+            inCall: false,
             title: 'Daily',
+            participants: [],
         })
         expect(
             readMeetingState(document, { hostname: 'teams.microsoft.com', pathname: '/light-meetings/launch' }).joined,

@@ -19,6 +19,28 @@ function setup() {
 const tab = { id: 7, url: 'https://meet.google.com/abc-defg-hij' }
 
 describe('Meet auto recording', () => {
+    it.each([
+        'https://meet.google.com/abc-defg-hij',
+        'https://meet.google.com/meet/abc-defg-hij?authuser=1',
+        'https://meet.google.com/meet/abc-defg-hij/',
+    ])('identifies the same room at %s', url => {
+        expect(meetingKey(url)).toBe('/abc-defg-hij')
+    })
+    it('keeps the armed meeting across a redirect to the prefixed room URL', async () => {
+        const { controller, deps } = setup()
+        await controller.arm(tab)
+        const redirected = { ...tab, url: 'https://meet.google.com/meet/abc-defg-hij?authuser=1' }
+        await controller.clearForTab(tab.id, redirected.url)
+        expect((await controller.update(redirected, { joined: true, title: 'Daily' })).status).toBe('recording')
+        expect(deps.start).toHaveBeenCalledWith(redirected, 'Daily')
+    })
+    it('arms and records a prefixed room URL', async () => {
+        const { controller, deps } = setup()
+        const prefixed = { ...tab, url: 'https://meet.google.com/meet/abc-defg-hij?authuser=1' }
+        await controller.arm(prefixed)
+        expect((await controller.update(prefixed, { joined: true, title: 'Daily' })).status).toBe('recording')
+        expect(deps.start).toHaveBeenCalledWith(prefixed, 'Daily')
+    })
     it('waits for explicit arming then starts only after joining', async () => {
         const { controller, deps } = setup()
         expect((await controller.update(tab, { joined: true, title: 'Daily' })).status).toBe('idle')
@@ -63,6 +85,22 @@ describe('Meet auto recording', () => {
         expect((await controller.update(tab, { joined: true, title: 'Daily' })).status).toBe('error')
         await controller.update(tab, { joined: true, title: 'Daily' })
         expect(deps.start).toHaveBeenCalledTimes(1)
+    })
+    it('ends the recording once the call is left, and stays stopped', async () => {
+        const { controller, deps } = setup()
+        await controller.arm(tab)
+        await controller.update(tab, { joined: true, title: 'Daily' })
+        expect((await controller.update(tab, { joined: false, title: 'Daily' })).status).toBe('recording')
+        expect((await controller.update(tab, { joined: false, title: 'Daily', left: true })).status).toBe('ended')
+        expect((await controller.update(tab, { joined: true, title: 'Daily' })).status).toBe('idle')
+        expect(deps.start).toHaveBeenCalledTimes(1)
+    })
+    it('keeps recording when the recorded tab navigates off the meeting page', async () => {
+        const { controller } = setup()
+        await controller.arm(tab)
+        await controller.update(tab, { joined: true, title: 'Daily' })
+        await controller.clearForTab(7, 'https://meet.google.com/landing')
+        expect((await controller.update(tab, { joined: true, title: 'Daily' })).status).toBe('recording')
     })
     it('clears waiting only for the matching tab on navigation or close', async () => {
         const { controller, deps } = setup()

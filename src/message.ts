@@ -54,6 +54,7 @@ export type Message =
     | SummaryStatusResponseMessage
     | CancelTasksForPathMessage
     | CloseOffscreenIfIdleMessage
+    | MeetingParticipantsMessage
 
 export interface ExceptionMessage {
     type: 'exception'
@@ -65,9 +66,15 @@ export interface TelemetryEventMessage {
     event: import('./telemetry_event').Event
 }
 
-export type Trigger = 'action-icon' | 'context-menu' | 'keyboard-shortcut' | 'tab-track-ended' | 'timer'
+export type Trigger =
+    | 'action-icon'
+    | 'context-menu'
+    | 'keyboard-shortcut'
+    | 'tab-track-ended'
+    | 'timer'
+    | 'meeting-ended'
 
-export type StartTrigger = Exclude<Trigger, 'tab-track-ended' | 'timer'>
+export type StartTrigger = Exclude<Trigger, 'tab-track-ended' | 'timer' | 'meeting-ended'>
 
 export interface StartRecordingMessage {
     type: 'start-recording'
@@ -86,6 +93,12 @@ export interface StartRecordingResponse {
     recordingMode: VideoRecordingMode
     micEnabled: boolean
     stopAtMs?: number
+}
+
+/** service_worker → offscreen while a meeting records: everyone seen in the call so far. */
+export interface MeetingParticipantsMessage {
+    type: 'meeting-participants'
+    participants: string[]
 }
 
 export interface TabTrackEndedMessage {

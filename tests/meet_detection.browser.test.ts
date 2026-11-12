@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it } from 'vitest'
-import { readMeetState } from '../src/meet/detection'
+import { readMeetState, readTeamsState } from '../src/meet/detection'
 
 const fixture = document.createElement('div')
 document.body.append(fixture)
@@ -40,6 +40,12 @@ describe('Google Meet detection', () => {
         fixture.innerHTML = '<div hidden><button aria-label="Leave call"></button></div>'
         expect(state().joined).toBe(false)
     })
+    it('keeps inCall while a modal hides the leave control, and drops it once the control is gone', () => {
+        fixture.innerHTML = '<div aria-hidden="true"><button aria-label="Leave call"></button></div>'
+        expect(state()).toMatchObject({ joined: false, inCall: true })
+        fixture.innerHTML = '<button>Rejoin</button>'
+        expect(state().inCall).toBe(false)
+    })
     it.each(['Meet - Sprint planning', 'Sprint planning - Google Meet', 'Google Meet – Sprint planning'])(
         'extracts meeting name from %s',
         title => {
@@ -54,5 +60,38 @@ describe('Google Meet detection', () => {
     it('falls back to the meeting code for a generic title', () => {
         document.title = 'Google Meet'
         expect(state().title).toBe('abc-defg-hij')
+    })
+    it('uses the room code instead of the meet prefix when the title is generic', () => {
+        document.title = 'Google Meet'
+        expect(readMeetState(document, '/meet/abc-defg-hij/').title).toBe('abc-defg-hij')
+    })
+})
+
+describe('participant names', () => {
+    it('reads unique Meet tile names, ignoring text outside tiles', () => {
+        fixture.innerHTML = `
+            <div data-participant-id="a"><span class="notranslate">Lan  Nguyễn</span></div>
+            <div data-participant-id="b"><div class="notranslate"><span class="notranslate">Minh</span></div></div>
+            <div data-participant-id="c"><span class="notranslate">Lan Nguyễn</span></div>
+            <span class="notranslate">Not a participant</span>`
+        expect(state().participants).toEqual(['Lan Nguyễn', 'Minh'])
+    })
+    it('skips Material icon ligatures and tile controls inside Meet tiles', () => {
+        fixture.innerHTML = `
+            <div data-participant-id="a">
+                <i class="google-material-icons notranslate">frame_person</i>
+                <span class="material-icons-extended notranslate">devices</span>
+                <div aria-hidden="true"><span class="notranslate">visual_effects</span></div>
+                <button><span class="notranslate">more_vert</span></button>
+                <span class="notranslate">Thắng Trần</span>
+                <span class="notranslate"></span>
+            </div>`
+        expect(state().participants).toEqual(['Thắng Trần'])
+    })
+    it('reads Teams name tags even when hidden until hover', () => {
+        fixture.innerHTML = `
+            <div data-tid="participant-info-nametag">Lan</div>
+            <div data-tid="participant-info-nametag" style="display:none">Minh</div>`
+        expect(readTeamsState(document).participants).toEqual(['Lan', 'Minh'])
     })
 })

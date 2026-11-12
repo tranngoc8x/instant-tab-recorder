@@ -48,12 +48,17 @@ export interface OffscreenDeps {
     recordingDB: RecordingDB
     getVideoFile(path: string): Promise<File>
     /** Hands meeting audio to JulyGateway (transcribed and analyzed server-side); job id, or null when not configured. */
-    uploadMeetingAudio?(file: Blob): Promise<string | null>
+    uploadMeetingAudio?(file: Blob, meeting: MeetingInfo): Promise<string | null>
     transcriptionSession?: TranscriptionSession
     transcriptionModelDownloader?: TranscriptionModelDownloader
     summarySession?: SummarySession
     summaryModelDownloader?: SummaryModelDownloader
     closeDocument?: () => void
+}
+
+export interface MeetingInfo {
+    title: string
+    participants: string[]
 }
 
 // ---------- handler ----------
@@ -65,6 +70,8 @@ export class OffscreenHandler {
     private currentRecordingStartAtMs: number | null = null
     private currentRecordingTitle: string | null = null
     private currentIsMeeting = false
+    private currentMeetingTitle = ''
+    private currentParticipants: string[] = []
     private pendingUploads = 0
 
     constructor(private readonly deps: OffscreenDeps) {}
@@ -138,6 +145,9 @@ export class OffscreenHandler {
                 return this.handleQuerySummaryStatus(message.path)
             case 'cancel-tasks-for-path':
                 return this.handleCancelTasksForPath(message.path)
+            case 'meeting-participants':
+                if (this.currentIsMeeting) this.currentParticipants = message.participants
+                return null
             case 'close-offscreen-if-idle':
                 this.maybeClose()
                 return null
@@ -185,6 +195,8 @@ export class OffscreenHandler {
         // Write initial record to IndexedDB
         this.currentRecordingStartAtMs = response.startAtMs
         this.currentIsMeeting = isMeeting
+        this.currentMeetingTitle = data.meetingTitle ?? ''
+        this.currentParticipants = []
         this.currentRecordingTitle = meetingFilename(data.meetingTitle, response.startAtMs, response.mainFilePath)
         try {
             const record: RecordingRecord = {
@@ -208,6 +220,7 @@ export class OffscreenHandler {
 
     private async handleStopRecording(trigger: Trigger): Promise<void> {
         const isMeeting = this.currentIsMeeting
+        const meeting: MeetingInfo = { title: this.currentMeetingTitle, participants: this.currentParticipants }
         try {
             const result = await this.deps.session.stop()
             if (result) {
@@ -237,7 +250,9 @@ export class OffscreenHandler {
                         thumbnail,
                     }
                     await this.deps.recordingDB.put(record)
-                    if (isMeeting) void this.uploadMeeting(result.mainFilePath)
+                    // Short meetings stay local only: not worth a transcription job.
+                    const minMs = this.deps.getConfiguration().gateway.minMeetingMinutes * 60_000
+                    if (isMeeting && result.durationMs >= minMs) void this.uploadMeeting(result.mainFilePath, meeting)
                 } catch (e) {
                     console.error('Failed to update IndexedDB record:', e)
                     this.deps.sendException(e, { exceptionSource: 'offscreen.stopRecording.indexedDB' })
@@ -267,12 +282,12 @@ export class OffscreenHandler {
     }
 
     /** Meeting recordings: one upload to the gateway, which does the rest. The local file is kept. */
-    private async uploadMeeting(path: string): Promise<void> {
+    private async uploadMeeting(path: string, meeting: MeetingInfo): Promise<void> {
         const upload = this.deps.uploadMeetingAudio
         if (!upload) return
         this.pendingUploads++
         try {
-            const jobId = await upload(await this.deps.getVideoFile(path))
+            const jobId = await upload(await this.deps.getVideoFile(path), meeting)
             if (jobId) console.log(`Meeting uploaded to gateway: ${path} (job ${jobId})`)
         } catch (e) {
             console.error('Meeting upload failed:', e)

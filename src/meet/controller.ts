@@ -8,6 +8,10 @@ export interface MeetSession {
 export interface MeetState {
     joined: boolean
     title: string
+    /** Names seen in the call so far (content script keeps the union). */
+    participants?: string[]
+    /** Was in the call and the leave control has been gone for a while: the meeting ended. */
+    left?: boolean
 }
 interface Deps {
     read(): Promise<MeetSession | undefined>
@@ -25,8 +29,9 @@ const TEAMS_ORIGINS = ['https://teams.microsoft.com', 'https://teams.live.com']
 export function meetingKey(url?: string): string | undefined {
     try {
         const parsed = new URL(url ?? '')
-        if (parsed.origin === 'https://meet.google.com' && /^\/[a-z]{3}-[a-z]{4}-[a-z]{3}\/?$/.test(parsed.pathname)) {
-            return parsed.pathname.replace(/\/$/, '')
+        const meetRoom = /^\/(?:meet\/)?([a-z]{3}-[a-z]{4}-[a-z]{3})\/?$/.exec(parsed.pathname)
+        if (parsed.origin === 'https://meet.google.com' && meetRoom) {
+            return `/${meetRoom[1]}`
         }
         if (TEAMS_ORIGINS.includes(parsed.origin) && parsed.pathname.startsWith('/light-meetings/')) {
             return '/teams-meeting'
@@ -64,6 +69,7 @@ export class MeetController {
         return this.serialize(async () => {
             const session = await this.deps.read()
             if (session?.tabId !== tabId) return
+            // Navigating never stops a recording; only closing the tab (tab-track-ended) or leaving the call does.
             if (nextUrl !== undefined && (session.status === 'recording' || session.meeting === meetingKey(nextUrl)))
                 return
             await this.deps.write(undefined)
@@ -73,7 +79,7 @@ export class MeetController {
     update(
         tab: MeetTab,
         state: MeetState,
-    ): Promise<{ status: 'idle' | 'armed' | 'recording' | 'error'; error?: string }> {
+    ): Promise<{ status: 'idle' | 'armed' | 'recording' | 'error' | 'ended'; error?: string }> {
         return this.serialize(async () => {
             const session = await this.deps.read()
             if (!session || session.tabId !== tab.id || session.meeting !== meetingKey(tab.url))
@@ -81,6 +87,10 @@ export class MeetController {
             if (session.status === 'recording' && !(await this.deps.isRecording())) {
                 await this.deps.write(undefined)
                 return { status: 'idle' }
+            }
+            if (session.status === 'recording' && state.left) {
+                await this.deps.write(undefined)
+                return { status: 'ended' }
             }
             if (session.status !== 'armed' || !state.joined) return session
             if (await this.deps.isRecording()) return { status: 'armed' }

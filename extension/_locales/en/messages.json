@@ -1038,5 +1038,13 @@
     "settingsGatewayToken": {
         "message": "API key",
         "description": "JulyGateway application API key"
+    },
+    "settingsGatewayMinMeeting": {
+        "message": "Minimum meeting length to upload",
+        "description": "Meetings shorter than this are not uploaded"
+    },
+    "settingsGatewayMinMeetingHint": {
+        "message": "Shorter meetings are kept on this device only. 0 uploads every meeting.",
+        "description": "Help text for the minimum meeting length setting"
     }
 }

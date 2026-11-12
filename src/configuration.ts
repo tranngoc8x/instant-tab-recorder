@@ -332,6 +332,8 @@ export interface SummaryConfig {
 export interface GatewaySettings {
     url: string
     token: string
+    /** Meetings shorter than this (minutes, excluding pauses) stay local only. 0 uploads every meeting. */
+    minMeetingMinutes: number
 }
 
 export type RecordingTimerReport = { enabled: boolean; durationMinutes?: number; skipStopConfirmation?: boolean }
@@ -431,7 +433,7 @@ export class Configuration {
             enabled: false,
             prompt: DEFAULT_SUMMARY_PROMPT,
         }
-        this.gateway = { url: '', token: '' }
+        this.gateway = { url: '', token: '', minMeetingMinutes: 3 }
     }
     static restoreDefault({ hasAgreedTerms = false, gateway }: Partial<Configuration> = {}): Configuration {
         const config = new Configuration()
